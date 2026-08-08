@@ -12,10 +12,12 @@ from pathlib import Path
 
 from wengao.config import load_config
 from wengao.errors import ConfigurationError
+from wengao.venus.portlock import TTY_PATTERN
 
 DEFAULT_APP_ROOT = Path("/data/apps/dbus-wengao")
 DEFAULT_CONFIG = Path("/data/setupOptions/WengaoDcdc/config.toml")
 DEFAULT_LINK_ROOT = Path("/service")
+SERIAL_STARTER_STOP = Path("/opt/victronenergy/serial-starter/stop-tty.sh")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -53,6 +55,8 @@ def generate_services(
         _copy_executable(log_template, log_root / "run")
         names.append(name)
     if link_root is not None:
+        for device in config.enabled_devices():
+            _quiesce_serial_starter(device.port)
         _synchronise_links(generated_root, link_root, frozenset(names))
     return tuple(names)
 
@@ -89,14 +93,41 @@ def _synchronise_links(generated_root: Path, link_root: Path, desired: frozenset
             raise ConfigurationError(f"refusing to replace non-symlink service path: {link}")
         if link.is_symlink():
             if link.resolve() == target.resolve():
+                _start(link)
                 continue
             link.unlink()
         link.symlink_to(target, target_is_directory=True)
+        _start(link)
 
 
 def _copy_executable(source: Path, destination: Path) -> None:
     shutil.copyfile(source, destination)
     destination.chmod(0o755)
+
+
+def _quiesce_serial_starter(
+    configured_port: str,
+    *,
+    helper: Path = SERIAL_STARTER_STOP,
+    device_root: Path = Path("/dev"),
+) -> bool:
+    """Stop existing auto-probes once before the Wengao process owns the port lock."""
+
+    try:
+        resolved = Path(configured_port).resolve(strict=True)
+    except OSError:
+        return False
+    if resolved.parent != device_root.resolve() or not TTY_PATTERN.fullmatch(resolved.name):
+        return False
+    if not helper.is_file() or not os.access(helper, os.X_OK):
+        return False
+    result = subprocess.run(
+        [os.fspath(helper), resolved.name],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
 
 
 def _points_within(link: Path, root: Path) -> bool:
@@ -117,6 +148,19 @@ def _stop(service: Path) -> None:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
+
+def _start(service: Path) -> None:
+    svc = shutil.which("svc")
+    if svc is None:
+        return
+    for path in (service / "log", service):
+        subprocess.run(
+            [svc, "-u", os.fspath(path)],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

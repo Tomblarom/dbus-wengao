@@ -41,9 +41,14 @@ system terminals, directions and DeviceInstances. Then run:
 ```
 
 Each enabled device gets an independent process, restart cycle and log. The configured
-`/dev/serial/by-path/...` path is opened with exclusive access. The package deliberately does
-not redefine global `serial-starter` aliases, because current Venus alias files overwrite one
-another and could remove other drivers from the probe list.
+`/dev/serial/by-path/...` path is opened with exclusive access. Each process also owns the
+corresponding `/var/lock/serial-starter/<tty>` lock for its lifetime, using the same mechanism as
+Venus `serial-starter`. This prevents GPS, VE.Direct and other probes from interleaving data on a
+configured Wengao port. During activation, the package first invokes Venus' own `stop-tty.sh`
+for each exactly resolved configured TTY. This stops an auto-probe that may already own the port;
+the Wengao process then keeps the shared lock for its lifetime. The package deliberately does not
+redefine global `serial-starter` aliases, because current Venus alias files overwrite one another
+and could remove other drivers from the probe list.
 
 Useful commands:
 
@@ -60,4 +65,3 @@ application path `/data/apps/dbus-wengao` after verifying it exactly.
 
 `setup`, `version` and `gitHubInfo` are included for optional future SetupHelper integration.
 The standalone `/data/apps` lifecycle remains the baseline and works without SetupHelper.
-

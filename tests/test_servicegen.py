@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from wengao.errors import ConfigurationError
-from wengao.servicegen import disable_services, generate_services
+from wengao.servicegen import (
+    _quiesce_serial_starter,
+    _start,
+    disable_services,
+    generate_services,
+)
 
 
 def write_test_app(tmp_path: Path, *, enabled: bool = True) -> tuple[Path, Path]:
@@ -76,3 +82,58 @@ def test_disable_ignores_non_symlinks_and_foreign_links(tmp_path: Path) -> None:
     (link_root / "dbus-wengao.foreign").write_text("not a link", encoding="utf-8")
     assert disable_services(app_root=app_root, link_root=link_root) == ()
     assert (link_root / "dbus-wengao.foreign").exists()
+
+
+def test_start_wakes_log_and_main_supervisors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(arguments: list[str], **_kwargs: Any) -> None:
+        calls.append(arguments)
+
+    monkeypatch.setattr("wengao.servicegen.shutil.which", lambda _name: "/usr/bin/svc")
+    monkeypatch.setattr("wengao.servicegen.subprocess.run", fake_run)
+    service = tmp_path / "dbus-wengao.test"
+    _start(service)
+    assert calls == [
+        ["/usr/bin/svc", "-u", str(service / "log")],
+        ["/usr/bin/svc", "-u", str(service)],
+    ]
+
+
+def test_quiesce_uses_official_helper_for_resolved_tty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    device_root = tmp_path / "dev"
+    device_root.mkdir()
+    port = device_root / "ttyACM1"
+    port.touch()
+    helper = tmp_path / "stop-tty.sh"
+    helper.touch()
+    calls: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+
+    def fake_run(arguments: list[str], **_kwargs: Any) -> Result:
+        calls.append(arguments)
+        return Result()
+
+    monkeypatch.setattr("wengao.servicegen.os.access", lambda *_args: True)
+    monkeypatch.setattr("wengao.servicegen.subprocess.run", fake_run)
+    assert _quiesce_serial_starter(str(port), helper=helper, device_root=device_root)
+    assert calls == [[str(helper), "ttyACM1"]]
+
+
+def test_quiesce_rejects_port_outside_device_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    device_root = tmp_path / "dev"
+    device_root.mkdir()
+    outside = tmp_path / "ttyACM1"
+    outside.touch()
+    helper = tmp_path / "stop-tty.sh"
+    helper.touch()
+    monkeypatch.setattr("wengao.servicegen.os.access", lambda *_args: True)
+    assert not _quiesce_serial_starter(str(outside), helper=helper, device_root=device_root)

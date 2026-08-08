@@ -17,6 +17,7 @@ from wengao.errors import WengaoError
 from wengao.protocol.capture import CaptureWriter
 from wengao.protocol.client import WengaoProtocol
 from wengao.protocol.transport import SerialRtuTransport
+from wengao.venus.portlock import SerialStarterPortLock
 from wengao.venus.publisher import VenusPublisher, service_name
 from wengao.venus.runtime import load_venus_runtime
 
@@ -79,7 +80,13 @@ def run_service(config_path: Path, device_id: str) -> int:
     identity = None
     snapshot = None
     backoff = 1.0
+    port_lock = SerialStarterPortLock()
     while identity is None or snapshot is None:
+        if not port_lock.acquire_for_port(config.port):
+            logging.warning("waiting for exclusive serial-starter lock for %s", config.id)
+            time.sleep(min(backoff, 5))
+            backoff = min(backoff * 2, 30)
+            continue
         try:
             identity = protocol.test_connection()
             snapshot = protocol.read_realtime()
@@ -107,6 +114,11 @@ def run_service(config_path: Path, device_id: str) -> int:
     def poll() -> bool:
         if stopping:
             return False
+        if not port_lock.acquire_for_port(config.port):
+            transport.close()
+            publisher.mark_disconnected()
+            logging.warning("serial port or serial-starter lock unavailable for %s", config.id)
+            return True
         try:
             current = protocol.read_realtime()
             if current.plausibility_errors():
@@ -123,6 +135,7 @@ def run_service(config_path: Path, device_id: str) -> int:
         main_loop.run()
     finally:
         transport.close()
+        port_lock.release()
         lock.close()
     return 0
 
