@@ -6,4 +6,6 @@ first public release is made.
 ## Unreleased
 
 - Establish the clean-room, read-only driver foundation.
-
+- Add strict fail-closed multi-device configuration and generic profiles.
+- Add read-only alternator, dcdc and dcsystem publishing with stale-data invalidation.
+- Add a vendored MIT-licensed Tomli fallback for stripped Venus OS Python builds.

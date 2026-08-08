@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import re
-import tomllib
 from dataclasses import dataclass, fields
+from importlib import import_module
 from pathlib import Path
 from typing import Any, TypeVar, cast
+
+try:
+    toml_parser: Any = import_module("tomllib")
+except ModuleNotFoundError:  # Some stripped Venus OS Python builds omit tomllib.
+    toml_parser = import_module("wengao._vendor.tomli")
 
 from wengao.errors import ConfigurationError
 from wengao.profiles import (
@@ -87,8 +92,8 @@ EnumType = TypeVar("EnumType")
 def load_config(path: Path, *, require_ports_exist: bool = False) -> DriverConfig:
     try:
         with path.open("rb") as handle:
-            raw = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError) as error:
+            raw = toml_parser.load(handle)
+    except (OSError, toml_parser.TOMLDecodeError) as error:
         raise ConfigurationError(f"cannot load configuration {path}: {error}") from error
     return parse_config(raw, require_ports_exist=require_ports_exist)
 

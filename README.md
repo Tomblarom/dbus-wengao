@@ -4,8 +4,8 @@
 bidirectional DC/DC converters.
 
 The project is in its read-only development phase. It can inspect device identity and
-measurements over Modbus RTU, but deliberately provides no register-write operation and no
-DVCC control.
+measurements over Modbus RTU and publish them through role-specific Venus OS D-Bus services,
+but deliberately provides no register-write operation and no DVCC control.
 
 ## Safety status
 
@@ -16,6 +16,10 @@ DVCC control.
   behaviour have been verified.
 
 See `docs/safety.md` and `docs/register-map.md` before connecting hardware.
+
+The current Venus roles are `com.victronenergy.alternator`, `com.victronenergy.dcdc` and
+`com.victronenergy.dcsystem`. Monitor-only is a control policy, not a separate D-Bus class.
+See `docs/venus-dbus.md` for the role and sign mapping.
 
 ## Development
 
@@ -41,4 +45,3 @@ Copyright (C) 2026 dbus-wengao contributors.
 
 This project is licensed under the GNU Affero General Public License v3.0 only. See
 `LICENSE`.
-

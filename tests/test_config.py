@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from wengao._vendor import tomli as vendored_tomli
 from wengao.config import load_config, parse_config
 from wengao.errors import ConfigurationError
 from wengao.profiles import ControlMode, Direction, DvccPolicy, VenusRole
@@ -47,6 +48,14 @@ def test_disabled_example_configuration_loads() -> None:
     assert device.control_mode is ControlMode.MONITOR_ONLY
     assert device.dvcc_policy is DvccPolicy.DISABLED
     assert not device.permissions.any_enabled()
+
+
+def test_vendored_tomli_can_parse_example_for_stripped_venus_python() -> None:
+    path = Path(__file__).parents[1] / "config" / "config.example.toml"
+    with path.open("rb") as handle:
+        parsed = vendored_tomli.load(handle)
+    assert parsed["config_version"] == 1
+    assert parsed["devices"][0]["enabled"] is False
 
 
 def test_schema_is_valid_json() -> None:
