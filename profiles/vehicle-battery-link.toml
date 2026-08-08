@@ -3,7 +3,6 @@ id = "vehicle-battery-link"
 allowed_directions = ["A-to-B", "B-to-A"]
 locked_direction = ""
 direction_control = ["external-hardware", "software", "device-automatic"]
-venus_roles = ["alternator", "dcsystem", "monitor-only"]
-default_venus_role = "monitor-only"
+venus_roles = ["alternator", "dcsystem"]
+default_venus_role = "dcsystem"
 dvcc_policy = "explicit-opt-in-after-verification"
-

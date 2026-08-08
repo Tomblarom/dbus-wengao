@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Tomblarom/dbus-wengao/config/config.schema.json",
+  "title": "dbus-wengao configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["config_version", "devices"],
+  "properties": {
+    "config_version": {"const": 1},
+    "devices": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/device"}
+    },
+    "debug": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "raw_capture": {"type": "boolean", "default": false},
+        "capture_directory": {"type": "string"}
+      }
+    }
+  },
+  "$defs": {
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "enabled", "profile", "port", "slave_address", "system_terminal",
+        "device_instance", "custom_name", "venus_role"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
+        "enabled": {"type": "boolean", "default": false},
+        "profile": {
+          "enum": [
+            "vehicle-battery-link", "bidirectional-battery-link",
+            "fixed-direction-dc-converter"
+          ]
+        },
+        "port": {"type": "string", "pattern": "^/dev/(serial/by-path/|tty)"},
+        "slave_address": {"type": "integer", "minimum": 1, "maximum": 247},
+        "system_terminal": {"enum": ["A", "B"]},
+        "device_instance": {"type": "integer", "minimum": 0, "maximum": 32767},
+        "custom_name": {"type": "string", "minLength": 1, "maxLength": 64},
+        "venus_role": {"enum": ["alternator", "dcsystem", "dcdc"]},
+        "control_mode": {"const": "monitor-only", "default": "monitor-only"},
+        "dvcc_policy": {"const": "disabled", "default": "disabled"},
+        "communication_timeout": {"type": "number", "minimum": 0.1, "maximum": 10},
+        "poll_interval": {"type": "number", "minimum": 0.5, "maximum": 60},
+        "allowed_directions": {
+          "type": "array", "uniqueItems": true, "items": {"enum": ["A-to-B", "B-to-A"]}
+        },
+        "locked_direction": {"enum": ["", "A-to-B", "B-to-A"]},
+        "permissions": {"$ref": "#/$defs/permissions"}
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "remote_on_off": {"const": false},
+        "set_voltage": {"const": false},
+        "set_current": {"const": false},
+        "set_direction": {"const": false},
+        "set_mode": {"const": false},
+        "set_protection_limits": {"const": false},
+        "calibration": {"const": false},
+        "factory_reset": {"const": false}
+      }
+    }
+  }
+}

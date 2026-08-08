@@ -9,10 +9,13 @@ slave_address = 1
 system_terminal = "B"
 device_instance = 40
 custom_name = "Wengao DC-DC"
-venus_role = "monitor-only"
+venus_role = "dcsystem"
+control_mode = "monitor-only"
 dvcc_policy = "disabled"
 communication_timeout = 1.0
 poll_interval = 2.0
+allowed_directions = ["A-to-B", "B-to-A"]
+locked_direction = ""
 
 [devices.permissions]
 remote_on_off = false
@@ -27,4 +30,3 @@ factory_reset = false
 [debug]
 raw_capture = false
 capture_directory = "/var/log/dbus-wengao/capture"
-
