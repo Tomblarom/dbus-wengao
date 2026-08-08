@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+APP_ROOT="${DBUS_WENGAO_ROOT:-/data/apps/dbus-wengao}"
+CONFIG_FILE="${DBUS_WENGAO_CONFIG:-/data/setupOptions/WengaoDcdc/config.toml}"
+SERVICE_DIR="$(dirname "$(readlink -f "$0")")"
+DEVICE_ID="${SERVICE_DIR##*/dbus-wengao.}"
+
+exec 2>&1
+exec env PYTHONPATH="$APP_ROOT/src" python3 -m wengao.venus.runner \
+    --config "$CONFIG_FILE" \
+    --device-id "$DEVICE_ID"
+

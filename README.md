@@ -39,6 +39,15 @@ dbus-wengao-read --port /dev/serial/by-path/REPLACE_ME --once
 Do not commit real port paths, serial numbers, credentials, local configuration or
 non-anonymised captures.
 
+## Venus OS installation model
+
+The runtime is installed under `/data/apps/dbus-wengao`. Local device configuration lives at
+`/data/setupOptions/WengaoDcdc/config.toml` and is outside the application directory, so updates
+and uninstall do not replace it. No service is enabled when that local file is absent.
+
+Tagged releases provide a pull-based installer and SHA-256-verified archive. See
+`docs/venus-installation.md`. This development branch has not produced a public release yet.
+
 ## License
 
 Copyright (C) 2026 dbus-wengao contributors.

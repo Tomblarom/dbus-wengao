@@ -33,6 +33,7 @@ dev = [
 [project.scripts]
 dbus-wengao-read = "wengao.cli:main"
 dbus-wengao-service = "wengao.venus.runner:main"
+dbus-wengao-services = "wengao.servicegen:main"
 
 [project.urls]
 Homepage = "https://github.com/Tomblarom/dbus-wengao"
@@ -59,3 +60,6 @@ python_version = "3.11"
 strict = true
 packages = ["wengao"]
 exclude = "src/wengao/_vendor/"
+
+[tool.coverage.run]
+omit = ["src/wengao/_vendor/*"]

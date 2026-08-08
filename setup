@@ -1,0 +1,19 @@
+#!/bin/bash
+set -euo pipefail
+
+APP_ROOT="${DBUS_WENGAO_ROOT:-/data/apps/dbus-wengao}"
+ACTION="${1:-install}"
+
+case "$ACTION" in
+    install|update|reinstall)
+        exec "$APP_ROOT/enable.sh"
+        ;;
+    uninstall)
+        exec "$APP_ROOT/uninstall.sh"
+        ;;
+    *)
+        echo "Unsupported setup action: $ACTION" >&2
+        exit 2
+        ;;
+esac
+

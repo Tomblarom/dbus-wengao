@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+LOG_DIR="$(dirname "$(readlink -f "$0")")"
+SERVICE_DIR="${LOG_DIR%/log}"
+DEVICE_ID="${SERVICE_DIR##*/dbus-wengao.}"
+
+exec multilog t s500000 n4 "/var/log/dbus-wengao.$DEVICE_ID"
+
