@@ -1,0 +1,9 @@
+profile_version = 1
+id = "fixed-direction-dc-converter"
+allowed_directions = ["A-to-B"]
+locked_direction = "A-to-B"
+direction_control = ["locked"]
+venus_roles = ["dcdc", "alternator", "monitor-only"]
+default_venus_role = "monitor-only"
+dvcc_policy = "disabled"
+

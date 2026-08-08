@@ -1,0 +1,40 @@
+# Local instructions and private source material
+agents.md
+reference-private/
+
+# Local Venus OS configuration and captures
+config.toml
+config.local.toml
+*.private.toml
+captures/
+*.jsonl
+*.pcap
+*.log
+
+# Credentials and keys
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Python/build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

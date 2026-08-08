@@ -1,0 +1,30 @@
+config_version = 1
+
+[[devices]]
+id = "example-device"
+enabled = false
+profile = "bidirectional-battery-link"
+port = "/dev/serial/by-path/REPLACE_ME"
+slave_address = 1
+system_terminal = "B"
+device_instance = 40
+custom_name = "Wengao DC-DC"
+venus_role = "monitor-only"
+dvcc_policy = "disabled"
+communication_timeout = 1.0
+poll_interval = 2.0
+
+[devices.permissions]
+remote_on_off = false
+set_voltage = false
+set_current = false
+set_direction = false
+set_mode = false
+set_protection_limits = false
+calibration = false
+factory_reset = false
+
+[debug]
+raw_capture = false
+capture_directory = "/var/log/dbus-wengao/capture"
+

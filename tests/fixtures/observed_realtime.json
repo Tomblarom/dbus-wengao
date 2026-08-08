@@ -1,0 +1,38 @@
+{
+  "source": "anonymised read-only RS485 observations",
+  "model": "WG-48BC1500M",
+  "request": "01030200001045BE",
+  "samples": [
+    {
+      "id": "sample-a",
+      "response": "01032015C5039B02031597038401F2002C002D000200040000000015E4001800280002A2E6",
+      "expected": {
+        "terminal_a_voltage_v": 55.73,
+        "terminal_a_current_a": 9.23,
+        "terminal_a_power_w": 515,
+        "terminal_b_voltage_v": 55.27,
+        "terminal_b_current_a": 9.0,
+        "terminal_b_power_w": 498,
+        "acc_voltage_v": 56.04,
+        "rmt_voltage_v": 0.24,
+        "charging_state": 2
+      }
+    },
+    {
+      "id": "sample-b",
+      "response": "01032015BD0054002F04E20173002E002C002B000200040000000015EB0013002C0006AC00",
+      "expected": {
+        "terminal_a_voltage_v": 55.65,
+        "terminal_a_current_a": 0.84,
+        "terminal_a_power_w": 47,
+        "terminal_b_voltage_v": 12.5,
+        "terminal_b_current_a": 3.71,
+        "terminal_b_power_w": 46,
+        "acc_voltage_v": 56.11,
+        "rmt_voltage_v": 0.19,
+        "charging_state": 6
+      }
+    }
+  ]
+}
+
