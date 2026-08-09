@@ -37,7 +37,7 @@
             "fixed-direction-dc-converter"
           ]
         },
-        "port": {"type": "string", "pattern": "^/dev/(serial/by-path/|tty)"},
+        "port": {"type": "string", "pattern": "^/dev/(serial/by-id/|tty)"},
         "slave_address": {"type": "integer", "minimum": 1, "maximum": 247},
         "system_terminal": {"enum": ["A", "B"]},
         "device_instance": {"type": "integer", "minimum": 0, "maximum": 32767},

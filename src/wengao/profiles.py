@@ -61,7 +61,7 @@ BUILTIN_PROFILES: dict[str, Profile] = {
         id="fixed-direction-dc-converter",
         default_directions=(),
         direction_must_be_locked=True,
-        allowed_venus_roles=frozenset({VenusRole.DC_DC, VenusRole.ALTERNATOR}),
+        allowed_venus_roles=frozenset({VenusRole.DC_DC, VenusRole.ALTERNATOR, VenusRole.DC_SYSTEM}),
         default_venus_role=VenusRole.DC_DC,
         direction_controls=frozenset({"locked"}),
     ),
