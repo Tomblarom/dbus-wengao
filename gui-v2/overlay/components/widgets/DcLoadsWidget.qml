@@ -56,7 +56,8 @@ OverviewWidget {
 				delegate: Item {
 					id: deviceDelegate
 
-					required property Device device
+					required property VeQItem item
+					readonly property string serviceUid: item.itemParent().uid
 					readonly property bool displayOfflineAsZero: showUnavailableItem.valid
 							&& showUnavailableItem.value === 1
 							&& connectedItem.value !== 1
@@ -72,7 +73,7 @@ OverviewWidget {
 							right: powerLabel.left
 							verticalCenter: parent.verticalCenter
 						}
-						text: device.name + ":"
+						text: (customNameItem.value || productNameItem.value || serviceUid) + ":"
 						elide: Text.ElideRight
 						font.pixelSize: root.tertiaryFontSize
 						color: powerLabel.unitColor
@@ -100,17 +101,27 @@ OverviewWidget {
 
 					DcDevice {
 						id: dcLoadDevice
-						serviceUid: device.serviceUid
+						serviceUid: deviceDelegate.serviceUid
+					}
+
+					VeQuickItem {
+						id: customNameItem
+						uid: deviceDelegate.serviceUid + "/CustomName"
+					}
+
+					VeQuickItem {
+						id: productNameItem
+						uid: deviceDelegate.serviceUid + "/ProductName"
 					}
 
 					VeQuickItem {
 						id: connectedItem
-						uid: device.serviceUid + "/Connected"
+						uid: deviceDelegate.serviceUid + "/Connected"
 					}
 
 					VeQuickItem {
 						id: showUnavailableItem
-						uid: device.serviceUid + "/WengaoShowUnavailable"
+						uid: deviceDelegate.serviceUid + "/WengaoShowUnavailable"
 					}
 				}
 			}
@@ -125,16 +136,26 @@ OverviewWidget {
 		});
 	}
 
-	FilteredDeviceModel {
+	VeQItemSortTableModel {
 		id: loadDevices
-		serviceTypes: ["dcsystem", "dcload", "dcdc", "motordrive"]
-		childFilterIds: {
-			"dcsystem": ["Connected", "WengaoShowUnavailable"],
-			"dcload": ["Connected", "WengaoShowUnavailable"],
-			"dcdc": ["Connected", "WengaoShowUnavailable"],
-			"motordrive": ["Connected", "WengaoShowUnavailable"]
+		dynamicSortFilter: true
+		filterRole: VeQItemTableModel.ValueRole
+		sortColumn: orderedChildren.sortValueColumn
+
+		model: VeQItemChildModel {
+			id: orderedChildren
+			childId: "WengaoDisplayOrder"
+			model: VeQItemFilteredServiceModel {
+				serviceTypes: ["dcsystem", "dcload", "dcdc", "motordrive"]
+			}
+			sortDelegate: VeQItemSortDelegate {
+				VeQuickItem {
+					id: displayOrderItem
+					uid: buddy.uid + "/WengaoDisplayOrder"
+				}
+				sortValue: displayOrderItem.valid ? displayOrderItem.value : 2147483647
+			}
 		}
-		childFilterFunction: root.includeLoadDevice
 	}
 
 	FilteredDeviceModel {

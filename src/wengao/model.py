@@ -45,6 +45,20 @@ class TerminalMeasurements:
 
 
 @dataclass(frozen=True, slots=True)
+class TerminalSetpoints:
+    voltage_v: float
+    current_a: float
+    power_w: int
+
+
+@dataclass(frozen=True, slots=True)
+class ControlSettings:
+    remote_enabled: bool
+    terminal_a: TerminalSetpoints
+    terminal_b: TerminalSetpoints
+
+
+@dataclass(frozen=True, slots=True)
 class RealtimeSnapshot:
     terminal_a: TerminalMeasurements
     terminal_b: TerminalMeasurements

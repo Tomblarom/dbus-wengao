@@ -21,8 +21,16 @@ target hardware; it does not by itself authorise writes.
 | `020D` | read | 0.01 V | RMT input voltage | observed-rs485, contradictory | BC900M document labels it compensation; hardware values support RMT |
 | `020E` | read | 1 °C | ambient/internal temperature | observed-rs485 | negative encoding unknown |
 | `020F` | read | 1 | charging state | observed-rs485, contradictory | state `6` observed although family document lists only `0..5` |
-| `0400–040A` | none | mixed | control settings | observed by read only | no writes authorised |
-| `0800–0833` | none | mixed | calibration, limits and thresholds | observed by read only | device-specific values are not public fixtures |
+| `0401` | read/write with opt-in | enum | remote output: `0` on, `1` off | documented-bc900m, app-source-confirmed | response echo and readback required |
+| `0400`, `0402–040A` | none | mixed | factory, mode, battery type, delay and calibration controls | app-source-confirmed | not authorised |
+| `081A` | read/write with opt-in | 0.01 V | terminal A voltage setpoint | documented-bc900m, app-source-confirmed | destination terminal only; persistent |
+| `081B` | read/write with opt-in | 0.01 A | terminal A current setpoint | documented-bc900m, app-source-confirmed | destination terminal only; persistent |
+| `081C` | read | 1 W | terminal A power setpoint | documented-bc900m, app-source-confirmed | not writable through D-Bus |
+| `081D` | read/write with opt-in | 0.01 V | terminal B voltage setpoint | documented-bc900m, app-source-confirmed | destination terminal only; persistent |
+| `081E` | read/write with opt-in | 0.01 A | terminal B current setpoint | documented-bc900m, app-source-confirmed | destination terminal only; persistent |
+| `081F` | read | 1 W | terminal B power setpoint | documented-bc900m, app-source-confirmed | not writable through D-Bus |
+| `0800–0819`, `0820–0833` | none | mixed | calibration, protection and other persistent settings | app-source-confirmed | not authorised |
 
-No register currently has write permission.
-
+All write permissions default to false. The WG-48BC1500M hard bounds used by configuration
+validation are 10–60 V, 1–100 A for terminal A and 1–25 A for terminal B. Every installation must
+configure an equal or narrower range before exposing a voltage/current path.

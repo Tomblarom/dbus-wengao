@@ -99,6 +99,19 @@ def test_display_can_keep_unavailable_devices_visible_as_zero() -> None:
     assert parsed.display.unavailable_devices is UnavailableDeviceDisplay.ZERO
 
 
+def test_display_order_follows_the_devices_array() -> None:
+    second = valid_device(id="device-2", port="/dev/ttyS2", device_instance=41)
+    parsed = parse_config(config_with(valid_device(), second))
+    assert [device.display_order for device in parsed.devices] == [0, 1]
+
+
+def test_vehicle_battery_link_defaults_to_alternator_role() -> None:
+    device = valid_device(profile="vehicle-battery-link")
+    del device["venus_role"]
+    parsed = parse_config(config_with(device))
+    assert parsed.devices[0].venus_role is VenusRole.ALTERNATOR
+
+
 def test_rejects_unknown_unavailable_device_display() -> None:
     raw = config_with(valid_device())
     raw["display"] = {"unavailable_devices": "invented"}
@@ -284,6 +297,67 @@ def test_monitor_only_rejects_every_write_permission(permission: str) -> None:
     permissions = {permission: True}
     with pytest.raises(ConfigurationError, match="enables writes"):
         parse_config(config_with(valid_device(permissions=permissions)))
+
+
+def test_external_dbus_control_requires_explicit_destination_limits() -> None:
+    device = valid_device(
+        profile="fixed-direction-dc-converter",
+        venus_role="dcdc",
+        control_mode="external-dbus",
+        allowed_directions=["A-to-B"],
+        locked_direction="A-to-B",
+        permissions={"set_voltage": True},
+    )
+    with pytest.raises(ConfigurationError, match="terminal_b_voltage is required"):
+        parse_config(config_with(device))
+
+
+def test_external_dbus_control_accepts_narrow_hardware_safe_limits() -> None:
+    device = valid_device(
+        profile="fixed-direction-dc-converter",
+        venus_role="dcdc",
+        control_mode="external-dbus",
+        allowed_directions=["A-to-B"],
+        locked_direction="A-to-B",
+        permissions={"remote_on_off": True, "set_voltage": True, "set_current": True},
+        write_limits={
+            "minimum_interval": 5,
+            "terminal_b_voltage": [48.0, 58.4],
+            "terminal_b_current": [1.0, 25.0],
+        },
+    )
+    parsed = parse_config(config_with(device)).devices[0]
+    assert parsed.control_mode is ControlMode.EXTERNAL_DBUS
+    assert parsed.write_limits.terminal_b_voltage is not None
+    assert parsed.write_limits.terminal_b_voltage.maximum == 58.4
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    [
+        ("terminal_b_voltage", [9.0, 58.4], "10..60 V"),
+        ("terminal_b_current", [1.0, 26.0], "1..25 A"),
+    ],
+)
+def test_external_dbus_limits_cannot_exceed_hardware(
+    key: str, value: list[float], message: str
+) -> None:
+    limits = {
+        "terminal_b_voltage": [48.0, 58.4],
+        "terminal_b_current": [1.0, 25.0],
+    }
+    limits[key] = value
+    device = valid_device(
+        profile="fixed-direction-dc-converter",
+        venus_role="dcdc",
+        control_mode="external-dbus",
+        allowed_directions=["A-to-B"],
+        locked_direction="A-to-B",
+        permissions={"set_voltage": True, "set_current": True},
+        write_limits=limits,
+    )
+    with pytest.raises(ConfigurationError, match=message):
+        parse_config(config_with(device))
 
 
 def test_rejects_unimplemented_dvcc() -> None:

@@ -65,6 +65,8 @@ class SerialRtuTransport:
             response.extend(self._read_exact(2, response))
             if response[1] & 0x80:
                 response.extend(self._read_exact(3, response))
+            elif response[1] in {0x06, 0x10}:
+                response.extend(self._read_exact(6, response))
             else:
                 response.extend(self._read_exact(1, response))
                 response.extend(self._read_exact(response[2] + 2, response))

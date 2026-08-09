@@ -24,6 +24,7 @@ class CaptureWriter:
         rx: bytes,
         start_register: int,
         register_count: int,
+        function: str = "read_holding_registers",
         duration_ms: float,
         result: str,
         error: str | None = None,
@@ -35,7 +36,7 @@ class CaptureWriter:
             "port": self._port_alias,
             "tx_hex": tx.hex().upper(),
             "decoded": {
-                "function": "read_holding_registers",
+                "function": function,
                 "start_register": f"0x{start_register:04X}",
                 "register_count": register_count,
             },
