@@ -8,6 +8,10 @@ Allows A-to-B and B-to-A operation. Its compatible Venus roles are `alternator` 
 DVCC remains disabled until volatile setpoints, write endurance and fail-safe behaviour are
 proven.
 
+The opposite terminal may optionally be exposed as an auxiliary battery monitor. This is useful
+for a vehicle or starter battery that must remain separate from the configured system terminal.
+It does not turn that battery into the Venus system battery or a BMS.
+
 ## `bidirectional-battery-link`
 
 Allows both directions between arbitrary battery systems. It publishes as `dcsystem` and does

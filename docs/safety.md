@@ -7,8 +7,10 @@ connected equipment.
 ## Current implementation boundary
 
 The read-only stages expose no function that builds or transmits Modbus functions `0x06` or
-`0x10`. Startup consists of configuration validation, opening the selected serial port, reading
-identity data, validating the model and then reading measurements.
+`0x10`. Startup consists of configuration validation and optional registration of explicitly
+configured disconnected D-Bus placeholders. The driver then opens the selected serial port, reads
+identity data, validates the model and reads measurements. A placeholder contains no valid
+measurement and cannot write to the converter.
 
 The following operations remain unavailable:
 
@@ -28,4 +30,3 @@ validation and readback. No automatic device write may occur at startup.
 
 DVCC additionally requires evidence that the target registers are suitable for frequent
 runtime updates and have a documented communication-loss fail-safe.
-

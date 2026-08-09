@@ -21,6 +21,11 @@ The current Venus roles are `com.victronenergy.alternator`, `com.victronenergy.d
 `com.victronenergy.dcsystem`. Monitor-only is a control policy, not a separate D-Bus class.
 See `docs/venus-dbus.md` for the role and sign mapping.
 
+A device may optionally publish its non-system terminal as a separate read-only
+`com.victronenergy.battery` monitor. This auxiliary service contains measurements only: it has no
+SOC, BMS limits, DVCC paths or control authority. The primary Venus battery monitor must be
+selected explicitly before enabling this feature.
+
 ## Development
 
 ```sh
@@ -38,6 +43,10 @@ dbus-wengao-read --port /dev/serial/by-id/REPLACE_ME --once
 
 Do not commit real port paths, serial numbers, credentials, local configuration or
 non-anonymised captures.
+
+The optional `[display] unavailable_devices` setting is `"hide"` by default. `"zero"` keeps every
+configured converter visible while disconnected; the GUI displays `0 W`, while the underlying
+measurement remains invalid and `/Connected` remains `0`.
 
 ## Venus OS installation model
 

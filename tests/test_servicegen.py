@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -75,6 +77,25 @@ def test_generator_refuses_to_replace_non_symlink_service(tmp_path: Path) -> Non
         generate_services(app_root=app_root, config_path=config_path, link_root=link_root)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="requires symlink creation privileges")
+def test_repeated_generation_does_not_quiesce_its_own_running_service(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app_root, config_path = write_test_app(tmp_path)
+    link_root = tmp_path / "service-links"
+    link_root.mkdir()
+    generate_services(app_root=app_root, config_path=config_path, link_root=link_root)
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "wengao.servicegen._quiesce_serial_starter",
+        lambda port: calls.append(port),
+    )
+
+    generate_services(app_root=app_root, config_path=config_path, link_root=link_root)
+
+    assert calls == []
+
+
 def test_disable_ignores_non_symlinks_and_foreign_links(tmp_path: Path) -> None:
     app_root, _config_path = write_test_app(tmp_path)
     link_root = tmp_path / "service-links"
@@ -124,6 +145,24 @@ def test_quiesce_uses_official_helper_for_resolved_tty(
     monkeypatch.setattr("wengao.servicegen.subprocess.run", fake_run)
     assert _quiesce_serial_starter(str(port), helper=helper, device_root=device_root)
     assert calls == [[str(helper), "ttyACM1"]]
+
+
+def test_quiesce_times_out_instead_of_blocking_enable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    device_root = tmp_path / "dev"
+    device_root.mkdir()
+    port = device_root / "ttyACM1"
+    port.touch()
+    helper = tmp_path / "stop-tty.sh"
+    helper.touch()
+
+    def fake_run(arguments: list[str], **_kwargs: Any) -> None:
+        raise subprocess.TimeoutExpired(arguments, 5)
+
+    monkeypatch.setattr("wengao.servicegen.os.access", lambda *_args: True)
+    monkeypatch.setattr("wengao.servicegen.subprocess.run", fake_run)
+    assert not _quiesce_serial_starter(str(port), helper=helper, device_root=device_root)
 
 
 def test_quiesce_rejects_port_outside_device_root(

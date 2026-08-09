@@ -27,6 +27,15 @@ set_protection_limits = false
 calibration = false
 factory_reset = false
 
+[devices.auxiliary_battery]
+enabled = false
+terminal = "A"
+device_instance = 80
+custom_name = "Auxiliary battery"
+
+[display]
+unavailable_devices = "hide"
+
 [debug]
 raw_capture = false
 capture_directory = "/var/log/dbus-wengao/capture"

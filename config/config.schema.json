@@ -11,6 +11,13 @@
       "type": "array",
       "items": {"$ref": "#/$defs/device"}
     },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "unavailable_devices": {"enum": ["hide", "zero"], "default": "hide"}
+      }
+    },
     "debug": {
       "type": "object",
       "additionalProperties": false,
@@ -51,7 +58,19 @@
           "type": "array", "uniqueItems": true, "items": {"enum": ["A-to-B", "B-to-A"]}
         },
         "locked_direction": {"enum": ["", "A-to-B", "B-to-A"]},
-        "permissions": {"$ref": "#/$defs/permissions"}
+        "permissions": {"$ref": "#/$defs/permissions"},
+        "auxiliary_battery": {"$ref": "#/$defs/auxiliaryBattery"}
+      }
+    },
+    "auxiliaryBattery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "terminal", "device_instance", "custom_name"],
+      "properties": {
+        "enabled": {"type": "boolean", "default": false},
+        "terminal": {"enum": ["A", "B"]},
+        "device_instance": {"type": "integer", "minimum": 0, "maximum": 32767},
+        "custom_name": {"type": "string", "minLength": 1, "maxLength": 64}
       }
     },
     "permissions": {

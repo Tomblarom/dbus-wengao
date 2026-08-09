@@ -6,7 +6,7 @@ import re
 from typing import Protocol
 
 from wengao import __version__
-from wengao.config import DeviceConfig
+from wengao.config import AuxiliaryBatteryConfig, DeviceConfig
 from wengao.model import DeviceIdentity, RealtimeSnapshot, TerminalMeasurements
 from wengao.profiles import Direction, Terminal, VenusRole, direction_from_operating_mode
 
@@ -29,10 +29,23 @@ class ServiceBackend(Protocol):
 
 
 def service_name(config: DeviceConfig) -> str:
-    suffix = re.sub(r"[^A-Za-z0-9_]", "_", config.id)
+    suffix = _dbus_safe_suffix(config.id)
+    return f"com.victronenergy.{config.venus_role.value}.{suffix}"
+
+
+def auxiliary_battery_service_name(config: DeviceConfig) -> str:
+    auxiliary = config.auxiliary_battery
+    if auxiliary is None or not auxiliary.enabled:
+        raise ValueError(f"device {config.id!r} has no enabled auxiliary battery")
+    suffix = _dbus_safe_suffix(config.id)
+    return f"com.victronenergy.battery.wengao_{suffix}_{auxiliary.terminal.value.lower()}"
+
+
+def _dbus_safe_suffix(value: str) -> str:
+    suffix = re.sub(r"[^A-Za-z0-9_]", "_", value)
     if suffix[0].isdigit():
         suffix = f"device_{suffix}"
-    return f"com.victronenergy.{config.venus_role.value}.{suffix}"
+    return suffix
 
 
 class VenusPublisher:
@@ -40,18 +53,20 @@ class VenusPublisher:
         self,
         service: ServiceBackend,
         config: DeviceConfig,
-        identity: DeviceIdentity,
+        identity: DeviceIdentity | None,
+        *,
+        show_unavailable: bool = False,
     ) -> None:
         self._service = service
         self._config = config
         self._cache: dict[str, object] = {}
         self._dynamic_paths: set[str] = set()
         self._add_mandatory(identity)
-        self._add_common_paths(identity)
+        self._add_common_paths(identity, show_unavailable=show_unavailable)
         self._add_role_paths()
         self._service.register()
 
-    def _add_mandatory(self, identity: DeviceIdentity) -> None:
+    def _add_mandatory(self, identity: DeviceIdentity | None) -> None:
         values: dict[str, object] = {
             "/Mgmt/ProcessName": "dbus-wengao",
             "/Mgmt/ProcessVersion": __version__,
@@ -59,23 +74,25 @@ class VenusPublisher:
             "/DeviceInstance": self._config.device_instance,
             "/ProductId": PRODUCT_ID_UNREGISTERED,
             "/ProductName": "Wengao WG-48BC1500M",
-            "/FirmwareVersion": identity.firmware_version,
-            "/HardwareVersion": identity.hardware_version,
-            "/Connected": 1,
+            "/FirmwareVersion": identity.firmware_version if identity else None,
+            "/HardwareVersion": identity.hardware_version if identity else None,
+            "/Connected": int(identity is not None),
         }
         for path, value in values.items():
             self._add(path, value)
 
-    def _add_common_paths(self, identity: DeviceIdentity) -> None:
+    def _add_common_paths(self, identity: DeviceIdentity | None, *, show_unavailable: bool) -> None:
+        connected = identity is not None
         static: dict[str, object] = {
             "/CustomName": self._config.custom_name,
-            "/Serial": identity.serial_number,
+            "/Serial": identity.serial_number if identity else None,
             "/Mode": 1,
             "/State": 0,
-            "/ErrorCode": 0,
-            "/Alarms/Communication": 0,
-            "/Wengao/Model": identity.model,
-            "/Wengao/ProtocolVersion": identity.protocol_version,
+            "/ErrorCode": 0 if connected else 1,
+            "/Alarms/Communication": 0 if connected else 2,
+            "/Wengao/Model": identity.model if identity else None,
+            "/Wengao/ProtocolVersion": identity.protocol_version if identity else None,
+            "/WengaoShowUnavailable": int(show_unavailable),
             "/Wengao/Direction": None,
             "/Wengao/DirectionAllowed": None,
             "/Wengao/PowerMode": None,
@@ -92,8 +109,32 @@ class VenusPublisher:
             "/Wengao/TerminalB/Current": None,
             "/Wengao/TerminalB/Power": None,
         }
+        runtime_paths = {
+            "/Wengao/Direction",
+            "/Wengao/DirectionAllowed",
+            "/Wengao/PowerMode",
+            "/Wengao/OperatingMode",
+            "/Wengao/ChargingState",
+            "/Wengao/FaultBits",
+            "/Wengao/AlarmBits",
+            "/Wengao/AccVoltage",
+            "/Wengao/RmtVoltage",
+            "/Wengao/TerminalA/Voltage",
+            "/Wengao/TerminalA/Current",
+            "/Wengao/TerminalA/Power",
+            "/Wengao/TerminalB/Voltage",
+            "/Wengao/TerminalB/Current",
+            "/Wengao/TerminalB/Power",
+        }
         for path, value in static.items():
-            self._add(path, value, dynamic=value is None or path in {"/State", "/ErrorCode"})
+            self._add(path, value, dynamic=path in runtime_paths)
+
+    def publish_identity(self, identity: DeviceIdentity) -> None:
+        self._set("/FirmwareVersion", identity.firmware_version)
+        self._set("/HardwareVersion", identity.hardware_version)
+        self._set("/Serial", identity.serial_number)
+        self._set("/Wengao/Model", identity.model)
+        self._set("/Wengao/ProtocolVersion", identity.protocol_version)
 
     def _add_role_paths(self) -> None:
         role = self._config.venus_role
@@ -199,6 +240,97 @@ class VenusPublisher:
             return
         self._service[path] = value
         self._cache[path] = value
+
+
+class AuxiliaryBatteryPublisher:
+    """Publish one converter terminal as a non-BMS battery monitor."""
+
+    def __init__(
+        self,
+        service: ServiceBackend,
+        config: DeviceConfig,
+        identity: DeviceIdentity | None,
+    ) -> None:
+        auxiliary = config.auxiliary_battery
+        if auxiliary is None or not auxiliary.enabled:
+            raise ValueError(f"device {config.id!r} has no enabled auxiliary battery")
+        self._service = service
+        self._device_config = config
+        self._config: AuxiliaryBatteryConfig = auxiliary
+        self._cache: dict[str, object] = {}
+        connected = identity is not None
+        serial = _auxiliary_serial(identity, auxiliary.terminal)
+        values: dict[str, object] = {
+            "/Mgmt/ProcessName": "dbus-wengao",
+            "/Mgmt/ProcessVersion": __version__,
+            "/Mgmt/Connection": f"Modbus RTU ({config.id}, terminal {auxiliary.terminal.value})",
+            "/DeviceInstance": auxiliary.device_instance,
+            "/ProductId": PRODUCT_ID_UNREGISTERED,
+            "/ProductName": "Wengao auxiliary battery monitor",
+            "/FirmwareVersion": identity.firmware_version if identity else None,
+            "/HardwareVersion": identity.hardware_version if identity else None,
+            "/Connected": int(connected),
+            "/CustomName": auxiliary.custom_name,
+            "/Serial": serial,
+            "/Dc/0/Voltage": None,
+            "/Dc/0/Current": None,
+            "/Dc/0/Power": None,
+            "/Dc/0/Temperature": None,
+            "/Soc": None,
+            "/Alarms/Communication": 0 if connected else 2,
+            "/Wengao/SourceDevice": config.id,
+            "/Wengao/Terminal": auxiliary.terminal.value,
+        }
+        for path, value in values.items():
+            self._add(path, value)
+        self._service.register()
+
+    def publish_identity(self, identity: DeviceIdentity) -> None:
+        self._set("/FirmwareVersion", identity.firmware_version)
+        self._set("/HardwareVersion", identity.hardware_version)
+        self._set("/Serial", _auxiliary_serial(identity, self._config.terminal))
+
+    def publish(self, snapshot: RealtimeSnapshot) -> None:
+        measurements = _system_measurements(snapshot, self._config.terminal)
+        direction = direction_from_operating_mode(snapshot.operating_mode)
+        self._set("/Connected", 1)
+        self._set("/Alarms/Communication", 0)
+        self._set("/Dc/0/Voltage", measurements.voltage_v)
+        self._set("/Dc/0/Temperature", snapshot.ambient_temperature_c)
+        if direction is None:
+            self._set("/Dc/0/Current", None)
+            self._set("/Dc/0/Power", None)
+            return
+        charge_sign = -_system_outward_sign(direction, self._config.terminal)
+        self._set("/Dc/0/Current", charge_sign * measurements.current_a)
+        self._set("/Dc/0/Power", charge_sign * measurements.power_w)
+
+    def mark_disconnected(self) -> None:
+        self._set("/Connected", 0)
+        self._set("/Alarms/Communication", 2)
+        for path in (
+            "/Dc/0/Voltage",
+            "/Dc/0/Current",
+            "/Dc/0/Power",
+            "/Dc/0/Temperature",
+        ):
+            self._set(path, None)
+
+    def _add(self, path: str, value: object) -> None:
+        self._service.add_path(path, value, writeable=False)
+        self._cache[path] = value
+
+    def _set(self, path: str, value: object) -> None:
+        if self._cache.get(path) == value:
+            return
+        self._service[path] = value
+        self._cache[path] = value
+
+
+def _auxiliary_serial(identity: DeviceIdentity | None, terminal: Terminal) -> str | None:
+    if identity is None:
+        return None
+    return f"{identity.serial_number}-{terminal.value}"
 
 
 def _system_measurements(

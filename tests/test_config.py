@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from wengao._vendor import tomli as vendored_tomli
-from wengao.config import load_config, parse_config
+from wengao.config import UnavailableDeviceDisplay, load_config, parse_config
 from wengao.errors import ConfigurationError
 from wengao.profiles import BUILTIN_PROFILES, ControlMode, Direction, DvccPolicy, VenusRole
 
@@ -48,6 +48,9 @@ def test_disabled_example_configuration_loads() -> None:
     assert device.control_mode is ControlMode.MONITOR_ONLY
     assert device.dvcc_policy is DvccPolicy.DISABLED
     assert not device.permissions.any_enabled()
+    assert device.auxiliary_battery is not None
+    assert not device.auxiliary_battery.enabled
+    assert config.display.unavailable_devices is UnavailableDeviceDisplay.HIDE
 
 
 def test_vendored_tomli_can_parse_example_for_stripped_venus_python() -> None:
@@ -89,6 +92,20 @@ def test_rejects_unknown_key() -> None:
         parse_config(raw)
 
 
+def test_display_can_keep_unavailable_devices_visible_as_zero() -> None:
+    raw = config_with(valid_device())
+    raw["display"] = {"unavailable_devices": "zero"}
+    parsed = parse_config(raw)
+    assert parsed.display.unavailable_devices is UnavailableDeviceDisplay.ZERO
+
+
+def test_rejects_unknown_unavailable_device_display() -> None:
+    raw = config_with(valid_device())
+    raw["display"] = {"unavailable_devices": "invented"}
+    with pytest.raises(ConfigurationError, match=r"display\.unavailable_devices"):
+        parse_config(raw)
+
+
 def test_rejects_duplicate_device_ids() -> None:
     second = valid_device(port="/dev/ttyS2", device_instance=41)
     with pytest.raises(ConfigurationError, match="duplicate device id"):
@@ -110,6 +127,60 @@ def test_rejects_duplicate_device_instance_within_class() -> None:
     second = valid_device(id="device-2", port="/dev/ttyS2")
     with pytest.raises(ConfigurationError, match="DeviceInstance"):
         parse_config(config_with(valid_device(), second))
+
+
+def test_auxiliary_battery_is_read_from_other_terminal() -> None:
+    auxiliary = {
+        "enabled": True,
+        "terminal": "A",
+        "device_instance": 80,
+        "custom_name": "Auxiliary battery",
+    }
+    parsed = parse_config(
+        config_with(valid_device(system_terminal="B", auxiliary_battery=auxiliary))
+    )
+    assert parsed.devices[0].auxiliary_battery is not None
+    assert parsed.devices[0].auxiliary_battery.terminal.value == "A"
+
+
+def test_rejects_auxiliary_battery_on_system_terminal() -> None:
+    auxiliary = {
+        "enabled": True,
+        "terminal": "B",
+        "device_instance": 80,
+        "custom_name": "Auxiliary battery",
+    }
+    with pytest.raises(ConfigurationError, match="must differ from system_terminal"):
+        parse_config(config_with(valid_device(system_terminal="B", auxiliary_battery=auxiliary)))
+
+
+def test_rejects_enabled_auxiliary_battery_for_disabled_device() -> None:
+    auxiliary = {
+        "enabled": True,
+        "terminal": "A",
+        "device_instance": 80,
+        "custom_name": "Auxiliary battery",
+    }
+    with pytest.raises(ConfigurationError, match="disabled device"):
+        parse_config(config_with(valid_device(enabled=False, auxiliary_battery=auxiliary)))
+
+
+def test_rejects_duplicate_auxiliary_battery_instances() -> None:
+    auxiliary = {
+        "enabled": True,
+        "terminal": "A",
+        "device_instance": 80,
+        "custom_name": "Auxiliary battery",
+    }
+    first = valid_device(auxiliary_battery=auxiliary)
+    second = valid_device(
+        id="device-2",
+        port="/dev/ttyS2",
+        device_instance=41,
+        auxiliary_battery=auxiliary,
+    )
+    with pytest.raises(ConfigurationError, match="class battery"):
+        parse_config(config_with(first, second))
 
 
 def test_allows_same_device_instance_in_different_classes() -> None:

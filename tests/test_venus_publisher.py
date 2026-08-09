@@ -4,7 +4,12 @@ from typing import Any
 
 from wengao.config import DeviceConfig, parse_config
 from wengao.model import DeviceIdentity, RealtimeSnapshot, TerminalMeasurements
-from wengao.venus.publisher import VenusPublisher, service_name
+from wengao.venus.publisher import (
+    AuxiliaryBatteryPublisher,
+    VenusPublisher,
+    auxiliary_battery_service_name,
+    service_name,
+)
 
 
 class FakeService:
@@ -43,6 +48,7 @@ def device_config(
     directions: list[str] | None = None,
     locked: str = "",
     device_id: str = "device-1",
+    auxiliary_battery: dict[str, object] | None = None,
 ) -> DeviceConfig:
     if directions is None:
         directions = ["A-to-B", "B-to-A"]
@@ -64,6 +70,11 @@ def device_config(
                 "allowed_directions": directions,
                 "locked_direction": locked,
                 "permissions": {},
+                **(
+                    {"auxiliary_battery": auxiliary_battery}
+                    if auxiliary_battery is not None
+                    else {}
+                ),
             }
         ],
     }
@@ -107,9 +118,38 @@ def test_paths_are_added_before_service_registration() -> None:
     assert not any(path.startswith("/Link/") for path in service.values)
 
 
+def test_unavailable_placeholder_is_explicit_and_contains_no_false_measurement() -> None:
+    service = FakeService()
+    publisher = VenusPublisher(service, device_config(), None, show_unavailable=True)
+    assert service.events[-1][0] == "register"
+    assert service.values["/Connected"] == 0
+    assert service.values["/Alarms/Communication"] == 2
+    assert service.values["/WengaoShowUnavailable"] == 1
+    assert service.values["/Dc/0/Power"] is None
+    publisher.publish_identity(identity())
+    assert service.values["/Serial"] == "PRIVATE-SERIAL"
+    publisher.mark_disconnected()
+    assert service.values["/Serial"] == "PRIVATE-SERIAL"
+
+
 def test_service_name_uses_role_and_dbus_safe_device_id() -> None:
     assert service_name(device_config(device_id="rear-converter")) == (
         "com.victronenergy.dcsystem.rear_converter"
+    )
+
+
+def test_auxiliary_battery_service_name_is_separate_and_dbus_safe() -> None:
+    config = device_config(
+        device_id="vehicle-link",
+        auxiliary_battery={
+            "enabled": True,
+            "terminal": "A",
+            "device_instance": 80,
+            "custom_name": "Auxiliary battery",
+        },
+    )
+    assert auxiliary_battery_service_name(config) == (
+        "com.victronenergy.battery.wengao_vehicle_link_a"
     )
 
 
@@ -219,3 +259,49 @@ def test_unknown_charging_state_is_preserved_raw_but_not_mapped() -> None:
     publisher.publish(snapshot(charging_state=6))
     assert service.values["/Wengao/ChargingState"] == 6
     assert service.values["/State"] == 0
+
+
+def test_auxiliary_battery_is_monitor_only_and_has_no_bms_limits() -> None:
+    config = device_config(
+        system_terminal="B",
+        auxiliary_battery={
+            "enabled": True,
+            "terminal": "A",
+            "device_instance": 80,
+            "custom_name": "Auxiliary battery",
+        },
+    )
+    service = FakeService()
+    publisher = AuxiliaryBatteryPublisher(service, config, None)
+    assert service.events[-1][0] == "register"
+    assert service.values["/Connected"] == 0
+    assert service.values["/Soc"] is None
+    assert not any(path.startswith("/Info/") for path in service.values)
+    assert not any(path.startswith("/Link/") for path in service.values)
+    publisher.publish_identity(identity())
+    publisher.publish(snapshot(mode=4))
+    assert service.values["/Connected"] == 1
+    assert service.values["/Dc/0/Voltage"] == 55.65
+    assert service.values["/Dc/0/Current"] == -0.84
+    assert service.values["/Dc/0/Power"] == -47
+
+
+def test_auxiliary_battery_current_is_positive_when_energy_enters_terminal() -> None:
+    config = device_config(
+        system_terminal="A",
+        auxiliary_battery={
+            "enabled": True,
+            "terminal": "B",
+            "device_instance": 80,
+            "custom_name": "Auxiliary battery",
+        },
+    )
+    service = FakeService()
+    publisher = AuxiliaryBatteryPublisher(service, config, identity())
+    publisher.publish(snapshot(mode=4))
+    assert service.values["/Dc/0/Voltage"] == 12.5
+    assert service.values["/Dc/0/Current"] == 3.71
+    assert service.values["/Dc/0/Power"] == 46
+    publisher.mark_disconnected()
+    assert service.values["/Connected"] == 0
+    assert service.values["/Dc/0/Voltage"] is None

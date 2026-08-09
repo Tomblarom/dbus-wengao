@@ -1,5 +1,15 @@
 """Read-only Victron Venus OS integration."""
 
-from .publisher import VenusPublisher, service_name
+from .publisher import (
+    AuxiliaryBatteryPublisher,
+    VenusPublisher,
+    auxiliary_battery_service_name,
+    service_name,
+)
 
-__all__ = ["VenusPublisher", "service_name"]
+__all__ = [
+    "AuxiliaryBatteryPublisher",
+    "VenusPublisher",
+    "auxiliary_battery_service_name",
+    "service_name",
+]

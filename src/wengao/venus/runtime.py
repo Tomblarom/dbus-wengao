@@ -19,6 +19,16 @@ class VenusRuntime:
     service_class: Any
 
 
+def _private_service_factory(vedbus: Any, dbus: Any) -> Any:
+    """Create services on separate bus connections so one process can export several roots."""
+
+    def create_service(name: str, *, register: bool) -> Any:
+        bus = dbus.SystemBus(private=True)
+        return vedbus.VeDbusService(name, bus=bus, register=register)
+
+    return create_service
+
+
 def load_venus_runtime() -> VenusRuntime:
     candidates = [
         os.environ.get("VELIB_PYTHON_PATH"),
@@ -33,8 +43,13 @@ def load_venus_runtime() -> VenusRuntime:
     sys.path.insert(0, str(velib_path))
     try:
         dbus_glib = import_module("dbus.mainloop.glib")
+        dbus = import_module("dbus")
         glib = import_module("gi.repository.GLib")
         vedbus = import_module("vedbus")
     except ImportError as error:
         raise ConfigurationError(f"cannot load Venus D-Bus runtime: {error}") from error
-    return VenusRuntime(dbus_glib.DBusGMainLoop, glib, vedbus.VeDbusService)
+    return VenusRuntime(
+        dbus_glib.DBusGMainLoop,
+        glib,
+        _private_service_factory(vedbus, dbus),
+    )
