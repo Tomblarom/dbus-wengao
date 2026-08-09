@@ -40,6 +40,11 @@ system terminals, directions and DeviceInstances. Then run:
 /data/apps/dbus-wengao/enable.sh
 ```
 
+Before enabling an auxiliary battery monitor, select the real house/system battery explicitly in
+Venus OS under the system battery-monitor setting. Do not leave this setting on automatic: if the
+primary battery later disconnects, an auxiliary or starter battery must not become the system
+measurement. The auxiliary `device_instance` must also be unused in the `battery` class.
+
 Each enabled device gets an independent process, restart cycle and log. USB adapters must be
 configured through their stable `/dev/serial/by-id/...` alias; built-in serial ports may use a
 direct `/dev/tty...` path. List the available aliases with:
@@ -56,6 +61,10 @@ for each exactly resolved configured TTY. This stops an auto-probe that may alre
 the Wengao process then keeps the shared lock for its lifetime. The package deliberately does not
 redefine global `serial-starter` aliases, because current Venus alias files overwrite one another
 and could remove other drivers from the probe list.
+
+Repeated activation does not call `stop-tty.sh` for a service link already managed by this package;
+otherwise the helper would wait for the running Wengao process to release its own lock. A five-second
+timeout also bounds the helper on first activation if another serial process does not release the TTY.
 
 Do not copy private aliases into the public repository. Multi-port adapters expose a separate
 interface suffix in each alias; assign only the interfaces physically connected to Wengao devices.

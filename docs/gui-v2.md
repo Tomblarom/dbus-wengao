@@ -5,6 +5,15 @@ Victron GUIv2 intentionally aggregates all `dcsystem`, `dcload` and `dcdc` servi
 optional dbus-wengao overlay keeps the aggregate widget but adds a compact live row containing
 the device name and power for every detected DC device.
 
+The overview layout follows the pinned Victron `AcWidgetContent` and `ThreePhaseDisplay` patterns:
+the normal large primary-colour total remains in its original position, while device names and
+right-aligned watt values use Victron's tertiary font and primary/secondary value colours in the
+same row style as AC phase summaries. The detail page uses the same offline display policy.
+
+With `[display] unavailable_devices = "zero"`, configured Wengao services remain present with
+`/Connected = 0` and are rendered as `0 W`. With `"hide"`, disconnected Wengao rows are filtered
+out. Other Victron DC devices retain their native behaviour.
+
 This is a display-only modification. It does not change the Wengao D-Bus services, sign mapping,
 permissions or Modbus communication.
 

@@ -18,6 +18,7 @@ DEFAULT_APP_ROOT = Path("/data/apps/dbus-wengao")
 DEFAULT_CONFIG = Path("/data/setupOptions/WengaoDcdc/config.toml")
 DEFAULT_LINK_ROOT = Path("/service")
 SERIAL_STARTER_STOP = Path("/opt/victronenergy/serial-starter/stop-tty.sh")
+SERIAL_STARTER_STOP_TIMEOUT = 5.0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -56,6 +57,9 @@ def generate_services(
         names.append(name)
     if link_root is not None:
         for device in config.enabled_devices():
+            link = link_root / f"dbus-wengao.{device.id}"
+            if link.is_symlink() and _points_within(link, generated_root):
+                continue
             _quiesce_serial_starter(device.port)
         _synchronise_links(generated_root, link_root, frozenset(names))
     return tuple(names)
@@ -121,12 +125,16 @@ def _quiesce_serial_starter(
         return False
     if not helper.is_file() or not os.access(helper, os.X_OK):
         return False
-    result = subprocess.run(
-        [os.fspath(helper), resolved.name],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        result = subprocess.run(
+            [os.fspath(helper), resolved.name],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=SERIAL_STARTER_STOP_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return False
     return result.returncode == 0
 
 

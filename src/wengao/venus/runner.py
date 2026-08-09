@@ -12,13 +12,18 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from wengao.config import DeviceConfig, load_config
+from wengao.config import DeviceConfig, UnavailableDeviceDisplay, load_config
 from wengao.errors import WengaoError
 from wengao.protocol.capture import CaptureWriter
 from wengao.protocol.client import WengaoProtocol
 from wengao.protocol.transport import SerialRtuTransport
 from wengao.venus.portlock import SerialStarterPortLock
-from wengao.venus.publisher import VenusPublisher, service_name
+from wengao.venus.publisher import (
+    AuxiliaryBatteryPublisher,
+    VenusPublisher,
+    auxiliary_battery_service_name,
+    service_name,
+)
 from wengao.venus.runtime import load_venus_runtime
 
 DEFAULT_CONFIG = Path("/data/setupOptions/WengaoDcdc/config.toml")
@@ -77,31 +82,27 @@ def run_service(config_path: Path, device_id: str) -> int:
         slave_address=config.slave_address,
         capture=capture,
     )
-    identity = None
-    snapshot = None
-    backoff = 1.0
-    port_lock = SerialStarterPortLock()
-    while identity is None or snapshot is None:
-        if not port_lock.acquire_for_port(config.port):
-            logging.warning("waiting for exclusive serial-starter lock for %s", config.id)
-            time.sleep(min(backoff, 5))
-            backoff = min(backoff * 2, 30)
-            continue
-        try:
-            identity = protocol.test_connection()
-            snapshot = protocol.read_realtime()
-        except (OSError, WengaoError) as error:
-            logging.warning("initial read failed for %s: %s", config.id, error)
-            transport.close()
-            time.sleep(backoff)
-            backoff = min(backoff * 2, 30)
     runtime = load_venus_runtime()
     runtime.dbus_main_loop(set_as_default=True)
-    backend = runtime.service_class(service_name(config), register=False)
-    publisher = VenusPublisher(backend, config, identity)
-    publisher.publish(snapshot)
+    show_unavailable = driver_config.display.unavailable_devices is UnavailableDeviceDisplay.ZERO
+    publisher: VenusPublisher | None = None
+    if show_unavailable:
+        backend = runtime.service_class(service_name(config), register=False)
+        publisher = VenusPublisher(backend, config, None, show_unavailable=True)
+    auxiliary_publisher: AuxiliaryBatteryPublisher | None = None
+    auxiliary = config.auxiliary_battery
+    if auxiliary is not None and auxiliary.enabled:
+        auxiliary_backend = runtime.service_class(
+            auxiliary_battery_service_name(config), register=False
+        )
+        auxiliary_publisher = AuxiliaryBatteryPublisher(auxiliary_backend, config, None)
+
     main_loop = runtime.glib.MainLoop()
     stopping = False
+    identity = None
+    port_lock = SerialStarterPortLock()
+    backoff = 1.0
+    next_attempt_at = 0.0
 
     def stop(_signum: int, _frame: object) -> None:
         nonlocal stopping
@@ -111,27 +112,61 @@ def run_service(config_path: Path, device_id: str) -> int:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
 
+    def mark_disconnected() -> None:
+        if publisher is not None:
+            publisher.mark_disconnected()
+        if auxiliary_publisher is not None:
+            auxiliary_publisher.mark_disconnected()
+
     def poll() -> bool:
+        nonlocal identity, publisher, backoff, next_attempt_at
         if stopping:
             return False
+        now = time.monotonic()
+        if now < next_attempt_at:
+            return True
         if not port_lock.acquire_for_port(config.port):
             transport.close()
-            publisher.mark_disconnected()
+            identity = None
+            mark_disconnected()
             logging.warning("serial port or serial-starter lock unavailable for %s", config.id)
+            next_attempt_at = now + backoff
+            backoff = min(backoff * 2, 30)
             return True
         try:
+            current_identity = identity or protocol.test_connection()
             current = protocol.read_realtime()
             if current.plausibility_errors():
                 raise RuntimeError("; ".join(current.plausibility_errors()))
+            identity = current_identity
+            if publisher is None:
+                backend = runtime.service_class(service_name(config), register=False)
+                publisher = VenusPublisher(
+                    backend,
+                    config,
+                    current_identity,
+                    show_unavailable=False,
+                )
+            else:
+                publisher.publish_identity(current_identity)
             publisher.publish(current)
+            if auxiliary_publisher is not None:
+                auxiliary_publisher.publish_identity(current_identity)
+                auxiliary_publisher.publish(current)
+            backoff = 1.0
+            next_attempt_at = now + config.poll_interval
         except (OSError, WengaoError, RuntimeError) as error:
             logging.warning("poll failed for %s: %s", config.id, error)
             transport.close()
-            publisher.mark_disconnected()
+            identity = None
+            mark_disconnected()
+            next_attempt_at = now + backoff
+            backoff = min(backoff * 2, 30)
         return True
 
-    runtime.glib.timeout_add(int(config.poll_interval * 1000), poll)
+    runtime.glib.timeout_add(500, poll)
     try:
+        poll()
         main_loop.run()
     finally:
         transport.close()
