@@ -33,7 +33,7 @@ pytest
 The read-only CLI is intentionally explicit:
 
 ```sh
-dbus-wengao-read --port /dev/serial/by-path/REPLACE_ME --once
+dbus-wengao-read --port /dev/serial/by-id/REPLACE_ME --once
 ```
 
 Do not commit real port paths, serial numbers, credentials, local configuration or

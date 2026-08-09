@@ -40,8 +40,15 @@ system terminals, directions and DeviceInstances. Then run:
 /data/apps/dbus-wengao/enable.sh
 ```
 
-Each enabled device gets an independent process, restart cycle and log. The configured
-`/dev/serial/by-path/...` path is opened with exclusive access. Each process also owns the
+Each enabled device gets an independent process, restart cycle and log. USB adapters must be
+configured through their stable `/dev/serial/by-id/...` alias; built-in serial ports may use a
+direct `/dev/tty...` path. List the available aliases with:
+
+```sh
+ls -l /dev/serial/by-id/
+```
+
+The configured path is opened with exclusive access. Each process also owns the
 corresponding `/var/lock/serial-starter/<tty>` lock for its lifetime, using the same mechanism as
 Venus `serial-starter`. This prevents GPS, VE.Direct and other probes from interleaving data on a
 configured Wengao port. During activation, the package first invokes Venus' own `stop-tty.sh`
@@ -49,6 +56,11 @@ for each exactly resolved configured TTY. This stops an auto-probe that may alre
 the Wengao process then keeps the shared lock for its lifetime. The package deliberately does not
 redefine global `serial-starter` aliases, because current Venus alias files overwrite one another
 and could remove other drivers from the probe list.
+
+Do not copy private aliases into the public repository. Multi-port adapters expose a separate
+interface suffix in each alias; assign only the interfaces physically connected to Wengao devices.
+Development configurations that still contain `/dev/serial/by-path/...` must be migrated before
+activation; validation rejects those aliases.
 
 Useful commands:
 

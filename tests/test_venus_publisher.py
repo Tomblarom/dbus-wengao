@@ -53,7 +53,7 @@ def device_config(
                 "id": device_id,
                 "enabled": True,
                 "profile": profile,
-                "port": "/dev/serial/by-path/synthetic",
+                "port": "/dev/serial/by-id/synthetic",
                 "slave_address": 1,
                 "system_terminal": system_terminal,
                 "device_instance": 40,
@@ -154,6 +154,21 @@ def test_fixed_dc_dc_uses_physical_source_and_destination() -> None:
     assert service.values["/Dc/In/I"] == 0.84
     assert service.values["/Dc/0/Voltage"] == 12.5
     assert service.values["/Dc/0/Current"] == 3.71
+
+
+def test_fixed_dc_system_reports_consumption_from_system_terminal() -> None:
+    config = device_config(
+        role="dcsystem",
+        profile="fixed-direction-dc-converter",
+        system_terminal="A",
+        directions=["A-to-B"],
+        locked="A-to-B",
+    )
+    service, publisher = create_publisher(config)
+    publisher.publish(snapshot(mode=4))
+    assert service.values["/Dc/0/Voltage"] == 55.65
+    assert service.values["/Dc/0/Current"] == 0.84
+    assert service.values["/Dc/0/Power"] == 47
 
 
 def test_disallowed_direction_invalidates_power_and_current() -> None:

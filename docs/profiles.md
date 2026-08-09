@@ -16,12 +16,13 @@ not participate in DVCC.
 ## `fixed-direction-dc-converter`
 
 Requires exactly one configured `allowed_directions` value and an identical `locked_direction`.
-Compatible roles are `dcdc` and `alternator`. A runtime direction conflict invalidates standard
-current and power paths; the driver never attempts to correct direction automatically.
+Compatible roles are `dcdc`, `alternator` and `dcsystem`. The `dcsystem` role is appropriate when
+the fixed converter is a source or load viewed from the configured system terminal. A runtime
+direction conflict invalidates standard current and power paths; the driver never attempts to
+correct direction automatically.
 
 ## Monitor-only
 
 `monitor-only` is the current control mode for every profile. It is not a Venus D-Bus class.
 Every device permission must remain false and configuration validation rejects any enabled
 write permission.
-
