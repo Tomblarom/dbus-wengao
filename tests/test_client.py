@@ -9,6 +9,7 @@ from conftest import holding_response
 from wengao.errors import UnsupportedDeviceError
 from wengao.protocol.capture import CaptureWriter
 from wengao.protocol.client import WengaoProtocol
+from wengao.protocol.crc import append_crc
 
 
 class FakeTransport:
@@ -32,9 +33,19 @@ def identity_registers(model: str = "WG-BC1500M", address: int = 1) -> tuple[int
     return tuple(int.from_bytes(payload[i : i + 2], "big") for i in range(0, 60, 2))
 
 
-def test_client_has_no_write_api() -> None:
+def test_client_exposes_only_the_confirmed_write_operations() -> None:
     public_names = {name for name in dir(WengaoProtocol) if not name.startswith("_")}
-    assert not any("write" in name.lower() for name in public_names)
+    write_names = {name for name in public_names if "write" in name.lower()}
+    assert write_names == {
+        "write_remote_enabled",
+        "write_terminal_current",
+        "write_terminal_voltage",
+    }
+    assert not any(
+        dangerous in name.lower()
+        for name in public_names
+        for dangerous in ("factory", "calibration", "protection", "direction", "mode")
+    )
 
 
 def test_connection_accepts_observed_internal_model() -> None:
@@ -66,3 +77,31 @@ def test_identity_capture_redacts_response(tmp_path: Path) -> None:
     assert record["rx_redacted"] is True
     assert record["rx_sha256"]
     assert "PRIVATE" not in capture_path.read_text(encoding="utf-8")
+
+
+def test_remote_control_write_validates_echo() -> None:
+    response = append_crc(bytes.fromhex("010604010001"))
+    transport = FakeTransport([response])
+    WengaoProtocol(transport).write_remote_enabled(False)
+    assert transport.requests == [append_crc(bytes.fromhex("010604010001"))]
+
+
+def test_terminal_voltage_write_uses_single_register_like_android_app() -> None:
+    response = append_crc(bytes.fromhex("0106081D157C"))
+    transport = FakeTransport([response])
+    WengaoProtocol(transport).write_terminal_voltage("B", 55.0)
+    assert transport.requests == [append_crc(bytes.fromhex("0106081D157C"))]
+
+
+def test_read_control_settings_decodes_remote_and_both_terminals() -> None:
+    transport = FakeTransport(
+        [
+            holding_response((0,)),
+            holding_response((1440, 5000, 720)),
+            holding_response((5400, 2000, 1080)),
+        ]
+    )
+    settings = WengaoProtocol(transport).read_control_settings()
+    assert settings.remote_enabled is True
+    assert settings.terminal_a.voltage_v == 14.4
+    assert settings.terminal_b.current_a == 20.0

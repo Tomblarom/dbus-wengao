@@ -34,14 +34,16 @@ def test_dc_load_widget_lists_each_device_and_its_power() -> None:
     assert "widgetSize: root.size" in widget
     assert "Layout.fillHeight: true" in widget
     assert widget.count("font.pixelSize: root.tertiaryFontSize") == 2
-    assert 'text: device.name + ":"' in widget
+    assert "customNameItem.value || productNameItem.value" in widget
     assert "valueColor: Theme.color_font_primary" in widget
     assert "unitColor: Theme.color_font_secondary" in widget
     assert "displayOfflineAsZero" in widget
-    assert 'uid: device.serviceUid + "/WengaoShowUnavailable"' in widget
+    assert 'uid: deviceDelegate.serviceUid + "/WengaoShowUnavailable"' in widget
     assert '"dcsystem": ["Connected", "WengaoShowUnavailable"]' in widget
     assert "sourceType: VenusOS.ElectricalQuantity_Source_Any" in widget
-    assert "serviceUid: device.serviceUid" in widget
+    assert "serviceUid: deviceDelegate.serviceUid" in widget
+    assert 'childId: "WengaoDisplayOrder"' in widget
+    assert "sortColumn: orderedChildren.sortValueColumn" in widget
 
 
 def test_gui_overlay_contains_no_installation_specific_identity() -> None:

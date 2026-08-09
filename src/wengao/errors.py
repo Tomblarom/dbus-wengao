@@ -42,3 +42,7 @@ class ModbusExceptionResponseError(ProtocolError):
 
 class UnsupportedDeviceError(ProtocolError):
     """The responder is not a recognised Wengao converter."""
+
+
+class UnsafeWriteError(WengaoError):
+    """A requested device write did not pass the configured safety gate."""

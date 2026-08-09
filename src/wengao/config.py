@@ -29,6 +29,9 @@ CONFIG_VERSION = 1
 MAX_DEVICE_INSTANCE = 32767
 DEVICE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 STABLE_SERIAL_PREFIX = "/dev/serial/by-id/"
+HARDWARE_VOLTAGE_MIN = 10.0
+HARDWARE_VOLTAGE_MAX = 60.0
+HARDWARE_CURRENT_MAX = {Terminal.A: 100.0, Terminal.B: 25.0}
 
 
 class UnavailableDeviceDisplay(StrEnum):
@@ -60,6 +63,30 @@ class AuxiliaryBatteryConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class WriteRange:
+    minimum: float
+    maximum: float
+
+    def contains(self, value: float) -> bool:
+        return self.minimum <= value <= self.maximum
+
+
+@dataclass(frozen=True, slots=True)
+class WriteLimits:
+    minimum_interval: float
+    terminal_a_voltage: WriteRange | None
+    terminal_a_current: WriteRange | None
+    terminal_b_voltage: WriteRange | None
+    terminal_b_current: WriteRange | None
+
+    def voltage(self, terminal: Terminal) -> WriteRange | None:
+        return self.terminal_a_voltage if terminal is Terminal.A else self.terminal_b_voltage
+
+    def current(self, terminal: Terminal) -> WriteRange | None:
+        return self.terminal_a_current if terminal is Terminal.A else self.terminal_b_current
+
+
+@dataclass(frozen=True, slots=True)
 class DeviceConfig:
     id: str
     enabled: bool
@@ -78,6 +105,8 @@ class DeviceConfig:
     locked_direction: Direction | None
     permissions: DevicePermissions
     auxiliary_battery: AuxiliaryBatteryConfig | None
+    write_limits: WriteLimits
+    display_order: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,8 +160,12 @@ def parse_config(raw: dict[str, Any], *, require_ports_exist: bool = False) -> D
     if not isinstance(raw_devices, list):
         raise ConfigurationError("devices must be an array of tables")
     devices = tuple(
-        _parse_device(cast(dict[str, Any], item), require_ports_exist=require_ports_exist)
-        for item in raw_devices
+        _parse_device(
+            cast(dict[str, Any], item),
+            display_order=index,
+            require_ports_exist=require_ports_exist,
+        )
+        for index, item in enumerate(raw_devices)
     )
     raw_display = raw.get("display", {})
     if not isinstance(raw_display, dict):
@@ -161,7 +194,9 @@ def parse_config(raw: dict[str, Any], *, require_ports_exist: bool = False) -> D
     return config
 
 
-def _parse_device(raw: dict[str, Any], *, require_ports_exist: bool) -> DeviceConfig:
+def _parse_device(
+    raw: dict[str, Any], *, display_order: int, require_ports_exist: bool
+) -> DeviceConfig:
     if not isinstance(raw, dict):
         raise ConfigurationError("each devices entry must be a table")
     allowed_keys = {
@@ -182,6 +217,7 @@ def _parse_device(raw: dict[str, Any], *, require_ports_exist: bool) -> DeviceCo
         "locked_direction",
         "permissions",
         "auxiliary_battery",
+        "write_limits",
     }
     _reject_unknown(raw, allowed_keys, "device")
     device_id = _string(raw.get("id"), "device.id")
@@ -287,6 +323,30 @@ def _parse_device(raw: dict[str, Any], *, require_ports_exist: bool) -> DeviceCo
         raise ConfigurationError(
             f"devices.{device_id} cannot enable direction writes for a fixed-direction profile"
         )
+    unsupported_permissions = {
+        name
+        for name in (
+            "set_direction",
+            "set_mode",
+            "set_protection_limits",
+            "calibration",
+            "factory_reset",
+        )
+        if getattr(permissions, name)
+    }
+    if unsupported_permissions:
+        raise ConfigurationError(
+            f"devices.{device_id} enables unimplemented write permissions: "
+            + ", ".join(sorted(unsupported_permissions))
+        )
+    write_limits = _parse_write_limits(raw.get("write_limits"), device_id=device_id)
+    _validate_write_configuration(
+        device_id=device_id,
+        control_mode=control_mode,
+        permissions=permissions,
+        directions=directions,
+        write_limits=write_limits,
+    )
     if dvcc is not DvccPolicy.DISABLED:
         raise ConfigurationError(f"devices.{device_id}.dvcc_policy is not implemented")
     auxiliary_battery = _parse_auxiliary_battery(
@@ -313,7 +373,99 @@ def _parse_device(raw: dict[str, Any], *, require_ports_exist: bool) -> DeviceCo
         locked_direction=locked,
         permissions=permissions,
         auxiliary_battery=auxiliary_battery,
+        write_limits=write_limits,
+        display_order=display_order,
     )
+
+
+def _parse_write_limits(raw: object, *, device_id: str) -> WriteLimits:
+    context = f"devices.{device_id}.write_limits"
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ConfigurationError(f"{context} must be a table")
+    keys = {
+        "minimum_interval",
+        "terminal_a_voltage",
+        "terminal_a_current",
+        "terminal_b_voltage",
+        "terminal_b_current",
+    }
+    _reject_unknown(raw, keys, context)
+    interval = _number(raw.get("minimum_interval", 5.0), f"{context}.minimum_interval")
+    if not 1.0 <= interval <= 3600.0:
+        raise ConfigurationError(f"{context}.minimum_interval must be in 1..3600 seconds")
+    return WriteLimits(
+        minimum_interval=interval,
+        terminal_a_voltage=_parse_write_range(
+            raw.get("terminal_a_voltage"), f"{context}.terminal_a_voltage"
+        ),
+        terminal_a_current=_parse_write_range(
+            raw.get("terminal_a_current"), f"{context}.terminal_a_current"
+        ),
+        terminal_b_voltage=_parse_write_range(
+            raw.get("terminal_b_voltage"), f"{context}.terminal_b_voltage"
+        ),
+        terminal_b_current=_parse_write_range(
+            raw.get("terminal_b_current"), f"{context}.terminal_b_current"
+        ),
+    )
+
+
+def _parse_write_range(raw: object, path: str) -> WriteRange | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or len(raw) != 2:
+        raise ConfigurationError(f"{path} must be [minimum, maximum]")
+    minimum = _number(raw[0], f"{path}[0]")
+    maximum = _number(raw[1], f"{path}[1]")
+    if minimum > maximum:
+        raise ConfigurationError(f"{path} minimum must not exceed maximum")
+    return WriteRange(minimum, maximum)
+
+
+def _validate_write_configuration(
+    *,
+    device_id: str,
+    control_mode: ControlMode,
+    permissions: DevicePermissions,
+    directions: tuple[Direction, ...],
+    write_limits: WriteLimits,
+) -> None:
+    if permissions.any_enabled() and control_mode is not ControlMode.EXTERNAL_DBUS:
+        raise ConfigurationError(
+            f"devices.{device_id} write permissions require control_mode = 'external-dbus'"
+        )
+    for terminal in (Terminal.A, Terminal.B):
+        voltage = write_limits.voltage(terminal)
+        current = write_limits.current(terminal)
+        prefix = f"devices.{device_id}.write_limits.terminal_{terminal.value.lower()}"
+        if voltage is not None and not (
+            HARDWARE_VOLTAGE_MIN <= voltage.minimum <= voltage.maximum <= HARDWARE_VOLTAGE_MAX
+        ):
+            raise ConfigurationError(
+                f"{prefix}_voltage must stay within "
+                f"{HARDWARE_VOLTAGE_MIN:g}..{HARDWARE_VOLTAGE_MAX:g} V"
+            )
+        terminal_current_max = HARDWARE_CURRENT_MAX[terminal]
+        if current is not None and not (
+            1.0 <= current.minimum <= current.maximum <= terminal_current_max
+        ):
+            raise ConfigurationError(
+                f"{prefix}_current must stay within 1..{terminal_current_max:g} A"
+            )
+
+    destinations = {
+        Terminal.B if direction is Direction.A_TO_B else Terminal.A for direction in directions
+    }
+    for terminal in destinations:
+        voltage = write_limits.voltage(terminal)
+        current = write_limits.current(terminal)
+        prefix = f"devices.{device_id}.write_limits.terminal_{terminal.value.lower()}"
+        if permissions.set_voltage and voltage is None:
+            raise ConfigurationError(f"{prefix}_voltage is required when set_voltage is enabled")
+        if permissions.set_current and current is None:
+            raise ConfigurationError(f"{prefix}_current is required when set_current is enabled")
 
 
 def _parse_auxiliary_battery(

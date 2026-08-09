@@ -27,6 +27,15 @@ set_protection_limits = false
 calibration = false
 factory_reset = false
 
+# Required only when the corresponding voltage/current permission is enabled.
+# Limits are per destination terminal and may only narrow the hardware limits.
+# [devices.write_limits]
+# minimum_interval = 5.0
+# terminal_a_voltage = [12.0, 14.6]
+# terminal_a_current = [1.0, 100.0]
+# terminal_b_voltage = [48.0, 58.4]
+# terminal_b_current = [1.0, 25.0]
+
 [devices.auxiliary_battery]
 enabled = false
 terminal = "A"

@@ -3,7 +3,13 @@
 Victron GUIv2 intentionally aggregates all `dcsystem`, `dcload` and `dcdc` services into one
 **DC Loads** overview widget. Its native detail page already lists the individual services. The
 optional dbus-wengao overlay keeps the aggregate widget but adds a compact live row containing
-the device name and power for every detected DC device.
+the device name and power for every configured Wengao service that has a DC-load role. Alternator
+services remain in Victron's native alternator/source presentation and are not duplicated here.
+
+Wengao rows are ordered by the position of their `[[devices]]` table in `config.toml`. The driver
+publishes that position through `/WengaoDisplayOrder`, and the overlay uses Victron's existing
+`VeQItemChildModel` and `VeQItemSortTableModel` pattern. Reordering the local device tables changes
+the row order after the services restart. `device_instance` remains independent.
 
 The overview layout follows the pinned Victron `AcWidgetContent` and `ThreePhaseDisplay` patterns:
 the normal large primary-colour total remains in its original position, while device names and

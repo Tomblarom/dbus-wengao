@@ -3,7 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from wengao.config import DeviceConfig, parse_config
-from wengao.model import DeviceIdentity, RealtimeSnapshot, TerminalMeasurements
+from wengao.model import (
+    ControlSettings,
+    DeviceIdentity,
+    RealtimeSnapshot,
+    TerminalMeasurements,
+    TerminalSetpoints,
+)
+from wengao.profiles import Terminal
 from wengao.venus.publisher import (
     AuxiliaryBatteryPublisher,
     VenusPublisher,
@@ -17,6 +24,8 @@ class FakeService:
         self.values: dict[str, object] = {}
         self.events: list[tuple[str, str, object]] = []
         self.set_count = 0
+        self.writeable: dict[str, bool] = {}
+        self.callbacks: dict[str, object] = {}
 
     def add_path(
         self,
@@ -26,8 +35,10 @@ class FakeService:
         writeable: bool = False,
         **kwargs: object,
     ) -> object:
-        assert writeable is False
         self.values[path] = value
+        self.writeable[path] = writeable
+        if "onchangecallback" in kwargs:
+            self.callbacks[path] = kwargs["onchangecallback"]
         self.events.append(("add", path, value))
         return object()
 
@@ -49,6 +60,9 @@ def device_config(
     locked: str = "",
     device_id: str = "device-1",
     auxiliary_battery: dict[str, object] | None = None,
+    control_mode: str = "monitor-only",
+    permissions: dict[str, bool] | None = None,
+    write_limits: dict[str, object] | None = None,
 ) -> DeviceConfig:
     if directions is None:
         directions = ["A-to-B", "B-to-A"]
@@ -65,11 +79,12 @@ def device_config(
                 "device_instance": 40,
                 "custom_name": "Wengao DC-DC",
                 "venus_role": role,
-                "control_mode": "monitor-only",
+                "control_mode": control_mode,
                 "dvcc_policy": "disabled",
                 "allowed_directions": directions,
                 "locked_direction": locked,
-                "permissions": {},
+                "permissions": permissions or {},
+                **({"write_limits": write_limits} if write_limits is not None else {}),
                 **(
                     {"auxiliary_battery": auxiliary_battery}
                     if auxiliary_battery is not None
@@ -116,6 +131,7 @@ def test_paths_are_added_before_service_registration() -> None:
     assert "/Connected" in service.values
     assert "/Dc/0/Power" in service.values
     assert not any(path.startswith("/Link/") for path in service.values)
+    assert not any(service.writeable.values())
 
 
 def test_unavailable_placeholder_is_explicit_and_contains_no_false_measurement() -> None:
@@ -179,6 +195,15 @@ def test_alternator_sign_is_positive_when_charging_system_terminal() -> None:
     assert service.values["/Dc/In/I"] == 0.84
     assert service.values["/Settings/BmsPresent"] == 0
     assert not any(path.startswith("/Link/") for path in service.values)
+
+
+def test_alternator_service_stays_stable_and_power_is_negative_in_reverse() -> None:
+    config = device_config(role="alternator", profile="vehicle-battery-link", system_terminal="B")
+    service, publisher = create_publisher(config)
+    publisher.publish(snapshot(mode=5))
+    assert service_name(config) == "com.victronenergy.alternator.device_1"
+    assert service.values["/Dc/0/Current"] == -3.71
+    assert service.values["/Dc/0/Power"] == -46
 
 
 def test_fixed_dc_dc_uses_physical_source_and_destination() -> None:
@@ -258,6 +283,54 @@ def test_unknown_charging_state_is_preserved_raw_but_not_mapped() -> None:
     service, publisher = create_publisher(device_config())
     publisher.publish(snapshot(charging_state=6))
     assert service.values["/Wengao/ChargingState"] == 6
+
+
+class FakeController:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+        self.settings = ControlSettings(
+            True,
+            TerminalSetpoints(14.4, 50.0, 720),
+            TerminalSetpoints(54.0, 20.0, 1080),
+        )
+
+    def set_remote_enabled(self, enabled: bool) -> ControlSettings:
+        self.calls.append(("remote", enabled))
+        return self.settings
+
+    def set_voltage(self, terminal: Terminal, value: float) -> ControlSettings:
+        self.calls.append((f"{terminal.value}-voltage", value))
+        return self.settings
+
+    def set_current(self, terminal: Terminal, value: float) -> ControlSettings:
+        self.calls.append((f"{terminal.value}-current", value))
+        return self.settings
+
+
+def test_external_control_exposes_only_permitted_destination_paths() -> None:
+    config = device_config(
+        role="dcdc",
+        profile="fixed-direction-dc-converter",
+        system_terminal="A",
+        directions=["A-to-B"],
+        locked="A-to-B",
+        control_mode="external-dbus",
+        permissions={"remote_on_off": True, "set_voltage": True, "set_current": True},
+        write_limits={
+            "terminal_b_voltage": [48.0, 58.4],
+            "terminal_b_current": [1.0, 25.0],
+        },
+    )
+    service = FakeService()
+    controller = FakeController()
+    VenusPublisher(service, config, identity(), controller=controller)
+    assert service.writeable["/Mode"] is True
+    assert service.writeable["/Wengao/Settings/TerminalA/Voltage"] is False
+    assert service.writeable["/Wengao/Settings/TerminalB/Voltage"] is True
+    callback = service.callbacks["/Wengao/Settings/TerminalB/Voltage"]
+    assert callable(callback)
+    assert callback("/Wengao/Settings/TerminalB/Voltage", 55.2) is True
+    assert controller.calls == [("B-voltage", 55.2)]
     assert service.values["/State"] == 0
 
 
