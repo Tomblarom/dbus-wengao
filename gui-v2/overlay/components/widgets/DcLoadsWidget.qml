@@ -25,7 +25,7 @@ OverviewWidget {
 	//% "DC Loads"
 	title: qsTrId("overview_widget_dcloads_title")
 	type: VenusOS.OverviewWidget_Type_DcLoads
-	enabled: systemLoadDevices.count > 1 || nonSystemLoadDevices.count > 0
+	enabled: systemLoadDevices.count > 1 || nonSystemLoadDevices.count > 0 || loadDevices.count > 0
 	preferredSize: loadDevices.count > 1 ? VenusOS.OverviewWidget_PreferredSize_PreferLarge : VenusOS.OverviewWidget_PreferredSize_Any
 
 	contentItem: ColumnLayout {
@@ -88,8 +88,9 @@ OverviewWidget {
 						}
 						dataObject: QtObject {
 							readonly property real power: deviceDelegate.displayOfflineAsZero
+									|| !dcLoadPowerItem.valid
 									? 0
-									: dcLoadDevice.power
+									: dcLoadPowerItem.value
 							readonly property real current: NaN
 						}
 						sourceType: VenusOS.ElectricalQuantity_Source_Any
@@ -99,9 +100,9 @@ OverviewWidget {
 						unitColor: Theme.color_font_secondary
 					}
 
-					DcDevice {
-						id: dcLoadDevice
-						serviceUid: deviceDelegate.serviceUid
+					VeQuickItem {
+						id: dcLoadPowerItem
+						uid: deviceDelegate.serviceUid + "/Wengao/DcLoadPower"
 					}
 
 					VeQuickItem {
@@ -146,7 +147,7 @@ OverviewWidget {
 			id: orderedChildren
 			childId: "WengaoDisplayOrder"
 			model: VeQItemFilteredServiceModel {
-				serviceTypes: ["dcsystem", "dcload", "dcdc", "motordrive"]
+				serviceTypes: ["alternator", "dcsystem", "dcload", "dcdc", "motordrive"]
 			}
 			sortDelegate: VeQItemSortDelegate {
 				VeQuickItem {

@@ -25,7 +25,8 @@ See `docs/venus-dbus.md` for the role and sign mapping.
 
 `vehicle-battery-link` defaults to `alternator`: A-to-B charging is published as positive
 alternator power, while a reverse B-to-A transfer remains the same stable service with negative
-power. It is therefore not included as a classic DC-load row.
+power. The optional GUI additionally lists it under DC Loads: A-to-B is `0 W`, while B-to-A is
+shown as positive consumption from the system battery.
 
 A device may optionally publish its non-system terminal as a separate read-only
 `com.victronenergy.battery` monitor. This auxiliary service contains measurements only: it has no

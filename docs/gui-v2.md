@@ -3,8 +3,10 @@
 Victron GUIv2 intentionally aggregates all `dcsystem`, `dcload` and `dcdc` services into one
 **DC Loads** overview widget. Its native detail page already lists the individual services. The
 optional dbus-wengao overlay keeps the aggregate widget but adds a compact live row containing
-the device name and power for every configured Wengao service that has a DC-load role. Alternator
-services remain in Victron's native alternator/source presentation and are not duplicated here.
+the device name and DC-load power for every configured Wengao service, including an alternator-role
+vehicle-battery link. The latter remains in Victron's native alternator/source presentation and is
+additionally listed here: charging the system battery is shown as `0 W`, while power leaving the
+system battery for the other terminal is shown as a positive DC load.
 
 Wengao rows are ordered by the position of their `[[devices]]` table in `config.toml`. The driver
 publishes that position through `/WengaoDisplayOrder`, and the overlay uses Victron's existing
@@ -20,8 +22,9 @@ With `[display] unavailable_devices = "zero"`, configured Wengao services remain
 `/Connected = 0` and are rendered as `0 W`. With `"hide"`, disconnected Wengao rows are filtered
 out. Other Victron DC devices retain their native behaviour.
 
-This is a display-only modification. It does not change the Wengao D-Bus services, sign mapping,
-permissions or Modbus communication.
+The driver publishes the normalized display value separately as `/Wengao/DcLoadPower`. This does
+not change standard role measurements, Venus system calculations, permissions or Modbus
+communication.
 
 ## Compatibility boundary
 

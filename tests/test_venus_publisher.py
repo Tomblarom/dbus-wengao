@@ -223,6 +223,7 @@ def test_alternator_sign_is_positive_when_charging_system_terminal() -> None:
     assert service.values["/Dc/0/Power"] == 46
     assert service.values["/Dc/In/V"] == 55.65
     assert service.values["/Dc/In/I"] == 0.84
+    assert service.values["/Wengao/DcLoadPower"] == 0
     assert service.values["/Settings/BmsPresent"] == 0
     assert not any(path.startswith("/Link/") for path in service.values)
 
@@ -234,6 +235,7 @@ def test_alternator_service_stays_stable_and_power_is_negative_in_reverse() -> N
     assert service_name(config) == "com.victronenergy.alternator.device_1"
     assert service.values["/Dc/0/Current"] == -3.71
     assert service.values["/Dc/0/Power"] == -46
+    assert service.values["/Wengao/DcLoadPower"] == 46
 
 
 def test_fixed_dc_dc_uses_physical_source_and_destination() -> None:
@@ -298,6 +300,7 @@ def test_disconnect_invalidates_measurements_and_marks_alarm() -> None:
     assert service.values["/Alarms/Communication"] == 2
     assert service.values["/Dc/0/Voltage"] is None
     assert service.values["/Wengao/TerminalA/Voltage"] is None
+    assert service.values["/Wengao/DcLoadPower"] is None
     assert service.values["/State"] == 0
 
 
