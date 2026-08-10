@@ -65,6 +65,13 @@ It is `0 W` while power enters the system and reports positive power while the c
 from the system. This lets an alternator-role vehicle-battery link remain a correct Victron source
 service while its reverse flow is also visible in the DC-load breakdown.
 
+`/Wengao/TerminalA/SignedCurrent` and `/Wengao/TerminalB/SignedCurrent` provide the
+direction-aware current at each physical terminal. Positive values mean energy is entering, or
+charging, the system connected to that terminal. Negative values mean that system is being
+discharged. The original `/Wengao/Terminal*/Current` paths remain unsigned device measurements,
+so raw protocol data is not altered. Signed current is invalid when the operating direction is
+unknown and whenever communication is unavailable.
+
 The product ID is currently `0xFFFF` to avoid claiming an assigned Victron product identifier.
 
 ## Auxiliary battery monitor

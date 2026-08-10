@@ -11,7 +11,14 @@ system battery for the other terminal is shown as a positive DC load.
 Wengao rows are ordered by the position of their `[[devices]]` table in `config.toml`. The driver
 publishes that position through `/WengaoDisplayOrder`, and the overlay uses Victron's existing
 `VeQItemChildModel` and `VeQItemSortTableModel` pattern. Reordering the local device tables changes
-the row order after the services restart. `device_instance` remains independent.
+the row order after the services restart. The same order is used in the **Total** table reached by
+opening the DC Loads widget. `device_instance` remains independent.
+
+The Total table includes every configured Wengao role, including `alternator`, so a vehicle-battery
+link remains present when unavailable under the `"zero"` policy. Each device row is followed by
+terminal A and terminal B current rows. Their battery-oriented sign convention is charging
+positive and discharging negative. Unknown offline currents remain `-- A`; only the configured
+offline DC-load power is rendered as `0 W`.
 
 The overview layout follows the pinned Victron `AcWidgetContent` and `ThreePhaseDisplay` patterns:
 the normal large primary-colour total remains in its original position, while device names and

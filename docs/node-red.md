@@ -54,5 +54,10 @@ Use Victron input nodes for `/Connected`, the setting path and
 and device readback. Rejected values leave the verified setting unchanged and put the reason in
 `LastResult` and the dbus-wengao service log.
 
+For direction-aware monitoring, read `/Wengao/TerminalA/SignedCurrent` and
+`/Wengao/TerminalB/SignedCurrent`. Positive current charges the system attached to that terminal;
+negative current discharges it. These paths are read-only and become invalid if the direction or
+live device data is unavailable.
+
 The driver intentionally does not expose direction, charging mode, battery type, protection
 limits, calibration, factory reset or DVCC to Node-RED.
