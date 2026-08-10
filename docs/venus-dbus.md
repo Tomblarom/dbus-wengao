@@ -60,6 +60,11 @@ For an intentionally optional device, `[devices.alarms] communication = false` k
 `/WengaoDisplayOrder` contains the device's position in `config.toml`. It is display metadata,
 not a Victron DeviceInstance. The GUI overlay sorts Wengao DC-load rows by this value.
 
+`/Wengao/DcLoadPower` is a non-negative display-only value from the configured system terminal.
+It is `0 W` while power enters the system and reports positive power while the converter draws
+from the system. This lets an alternator-role vehicle-battery link remain a correct Victron source
+service while its reverse flow is also visible in the DC-load breakdown.
+
 The product ID is currently `0xFFFF` to avoid claiming an assigned Victron product identifier.
 
 ## Auxiliary battery monitor

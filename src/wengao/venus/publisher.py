@@ -128,6 +128,7 @@ class VenusPublisher:
             "/Wengao/AlarmBits": None,
             "/Wengao/AccVoltage": None,
             "/Wengao/RmtVoltage": None,
+            "/Wengao/DcLoadPower": None,
             "/Wengao/TerminalA/Voltage": None,
             "/Wengao/TerminalA/Current": None,
             "/Wengao/TerminalA/Power": None,
@@ -145,6 +146,7 @@ class VenusPublisher:
             "/Wengao/AlarmBits",
             "/Wengao/AccVoltage",
             "/Wengao/RmtVoltage",
+            "/Wengao/DcLoadPower",
             "/Wengao/TerminalA/Voltage",
             "/Wengao/TerminalA/Current",
             "/Wengao/TerminalA/Power",
@@ -210,6 +212,14 @@ class VenusPublisher:
         self._set("/Wengao/RmtVoltage", snapshot.rmt_voltage_v)
         self._publish_raw_terminal("A", snapshot.terminal_a)
         self._publish_raw_terminal("B", snapshot.terminal_b)
+        if allowed and direction is not None:
+            system = _system_measurements(snapshot, self._config.system_terminal)
+            outward_power = (
+                _system_outward_sign(direction, self._config.system_terminal) * system.power_w
+            )
+            self._set("/Wengao/DcLoadPower", max(0, outward_power))
+        else:
+            self._set("/Wengao/DcLoadPower", None)
         self._set("/ErrorCode", 0 if snapshot.fault_bits == 0 and allowed else 1)
         self._set("/State", _venus_state(snapshot.charging_state) if allowed else 0)
         if direction is None or direction not in self._config.allowed_directions:

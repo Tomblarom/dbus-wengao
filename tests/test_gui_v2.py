@@ -28,7 +28,7 @@ def test_dc_load_widget_lists_each_device_and_its_power() -> None:
     )
     assert "This code is based on Victron Energy code" in widget
     assert re.search(r"id:\s*loadDevices", widget)
-    assert 'serviceTypes: ["dcsystem", "dcload", "dcdc", "motordrive"]' in widget
+    assert 'serviceTypes: ["alternator", "dcsystem", "dcload", "dcdc", "motordrive"]' in widget
     assert re.search(r"Repeater\s*\{\s*model:\s*loadDevices", widget)
     assert "OverviewWidget_PreferredSize_PreferLarge" in widget
     assert "widgetSize: root.size" in widget
@@ -38,10 +38,11 @@ def test_dc_load_widget_lists_each_device_and_its_power() -> None:
     assert "valueColor: Theme.color_font_primary" in widget
     assert "unitColor: Theme.color_font_secondary" in widget
     assert "displayOfflineAsZero" in widget
+    assert 'uid: deviceDelegate.serviceUid + "/Wengao/DcLoadPower"' in widget
+    assert "!dcLoadPowerItem.valid" in widget
     assert 'uid: deviceDelegate.serviceUid + "/WengaoShowUnavailable"' in widget
     assert '"dcsystem": ["Connected", "WengaoShowUnavailable"]' in widget
     assert "sourceType: VenusOS.ElectricalQuantity_Source_Any" in widget
-    assert "serviceUid: deviceDelegate.serviceUid" in widget
     assert 'childId: "WengaoDisplayOrder"' in widget
     assert "sortColumn: orderedChildren.sortValueColumn" in widget
 
