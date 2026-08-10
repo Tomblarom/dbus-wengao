@@ -12,7 +12,9 @@ Wengao rows are ordered by the position of their `[[devices]]` table in `config.
 publishes that position through `/WengaoDisplayOrder`, and the overlay uses Victron's existing
 `VeQItemChildModel` and `VeQItemSortTableModel` pattern. Reordering the local device tables changes
 the row order after the services restart. The same order is used in the **Total** table reached by
-opening the DC Loads widget. `device_instance` remains independent.
+opening the DC Loads widget. The detail page owns its live models instead of borrowing models from
+the overview page, so navigating away from the overview cannot empty or reorder the table.
+`device_instance` remains independent.
 
 The Total table includes every configured Wengao role, including `alternator`, so a vehicle-battery
 link remains present when unavailable under the `"zero"` policy. Each device row is followed by

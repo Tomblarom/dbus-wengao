@@ -15,7 +15,7 @@ OverviewWidget {
 
 	function includeNonWengaoDevice(_device, childItems) {
 		const marker = childItems["WengaoShowUnavailable"]
-		return !marker || !marker.valid
+		return marker?.value !== 1
 	}
 
 	//% "DC Loads"
@@ -127,9 +127,7 @@ OverviewWidget {
 
 	onClicked: {
 		Global.pageManager.pushPage("/pages/loads/DcLoadListPage.qml", {
-			title: root.title,
-			wengaoModel: loadDevices,
-			nonWengaoModel: nonWengaoLoadDevices
+			title: root.title
 		});
 	}
 
