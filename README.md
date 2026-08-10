@@ -33,6 +33,10 @@ A device may optionally publish its non-system terminal as a separate read-only
 SOC, BMS limits, DVCC paths or control authority. The primary Venus battery monitor must be
 selected explicitly before enabling this feature.
 
+With `[display] unavailable_devices = "zero"`, that auxiliary battery remains present in Victron's
+native battery list while the converter is offline. It stays marked disconnected and shows an
+unavailable voltage instead of a fabricated or stale measurement.
+
 ## Development
 
 ```sh
@@ -53,7 +57,7 @@ non-anonymised captures.
 
 The optional `[display] unavailable_devices` setting is `"hide"` by default. `"zero"` keeps every
 configured converter visible while disconnected; the GUI displays `0 W`, while the underlying
-measurement remains invalid and `/Connected` remains `0`.
+converter measurement remains invalid and `/Connected` remains `0`.
 
 The optional GUI orders Wengao load rows by their zero-based position in the `[[devices]]` array.
 Reorder those tables in the local `config.toml` to control the display; `device_instance` remains

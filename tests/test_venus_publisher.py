@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from wengao.config import DeviceConfig, parse_config
@@ -197,6 +198,31 @@ def test_auxiliary_battery_service_name_is_separate_and_dbus_safe() -> None:
     assert auxiliary_battery_service_name(config) == (
         "com.victronenergy.battery.wengao_vehicle_link_a"
     )
+
+
+def test_auxiliary_battery_zero_policy_stays_visible_without_a_false_voltage() -> None:
+    config = device_config(
+        auxiliary_battery={
+            "enabled": True,
+            "terminal": "A",
+            "device_instance": 80,
+            "custom_name": "Auxiliary battery",
+        },
+    )
+    service = FakeService()
+    publisher = AuxiliaryBatteryPublisher(service, config, None, show_unavailable=True)
+    assert service.values["/Connected"] == 0
+    assert math.isnan(service.values["/Dc/0/Voltage"])
+
+    writes_before = service.set_count
+    publisher.mark_disconnected()
+    assert service.set_count == writes_before
+
+    publisher.publish(snapshot(mode=4))
+    assert service.values["/Dc/0/Voltage"] == 55.65
+    publisher.mark_disconnected()
+    assert math.isnan(service.values["/Dc/0/Voltage"])
+    assert service.values["/Dc/0/Current"] is None
 
 
 def test_dc_system_sign_is_positive_when_power_leaves_system_terminal() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 from typing import Protocol
 
@@ -414,6 +415,8 @@ class AuxiliaryBatteryPublisher:
         service: ServiceBackend,
         config: DeviceConfig,
         identity: DeviceIdentity | None,
+        *,
+        show_unavailable: bool = False,
     ) -> None:
         auxiliary = config.auxiliary_battery
         if auxiliary is None or not auxiliary.enabled:
@@ -422,6 +425,7 @@ class AuxiliaryBatteryPublisher:
         self._device_config = config
         self._config: AuxiliaryBatteryConfig = auxiliary
         self._cache: dict[str, object] = {}
+        self._show_unavailable = show_unavailable
         connected = identity is not None
         communication_alarm = 2 if not connected and config.alarms.communication else 0
         serial = _auxiliary_serial(identity, auxiliary.terminal)
@@ -437,7 +441,7 @@ class AuxiliaryBatteryPublisher:
             "/Connected": int(connected),
             "/CustomName": auxiliary.custom_name,
             "/Serial": serial,
-            "/Dc/0/Voltage": None,
+            "/Dc/0/Voltage": math.nan if show_unavailable else None,
             "/Dc/0/Current": None,
             "/Dc/0/Power": None,
             "/Dc/0/Temperature": None,
@@ -473,8 +477,8 @@ class AuxiliaryBatteryPublisher:
     def mark_disconnected(self) -> None:
         self._set("/Connected", 0)
         self._set("/Alarms/Communication", 2 if self._device_config.alarms.communication else 0)
+        self._set("/Dc/0/Voltage", math.nan if self._show_unavailable else None)
         for path in (
-            "/Dc/0/Voltage",
             "/Dc/0/Current",
             "/Dc/0/Power",
             "/Dc/0/Temperature",
@@ -486,7 +490,13 @@ class AuxiliaryBatteryPublisher:
         self._cache[path] = value
 
     def _set(self, path: str, value: object) -> None:
-        if self._cache.get(path) == value:
+        previous = self._cache.get(path)
+        if previous == value or (
+            isinstance(previous, float)
+            and isinstance(value, float)
+            and math.isnan(previous)
+            and math.isnan(value)
+        ):
             return
         self._service[path] = value
         self._cache[path] = value

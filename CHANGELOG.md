@@ -18,3 +18,4 @@ first public release is made.
 - Add a per-device communication-alarm policy for intentionally optional converters.
 - Exit main and log supervisors cleanly when regenerating daemontools services.
 - Include alternator-role Wengao devices in the DC-load breakdown with direction-aware power.
+- Keep configured auxiliary batteries in Victron's native battery list while unavailable.

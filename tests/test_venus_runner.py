@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -183,7 +184,9 @@ def test_zero_policy_publishes_offline_converter_and_auxiliary_battery(
     }
     assert services["com.victronenergy.dcsystem.test_device"].values["/Connected"] == 0
     assert services["com.victronenergy.dcsystem.test_device"].values["/WengaoShowUnavailable"] == 1
-    assert services["com.victronenergy.battery.wengao_test_device_a"].values["/Connected"] == 0
+    auxiliary = services["com.victronenergy.battery.wengao_test_device_a"]
+    assert auxiliary.values["/Connected"] == 0
+    assert math.isnan(auxiliary.values["/Dc/0/Voltage"])
 
 
 def test_hide_policy_does_not_publish_never_seen_converter(
