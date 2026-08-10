@@ -13,8 +13,9 @@ import Victron.VenusOS
 Page {
 	id: root
 
-	required property var wengaoModel
-	required property FilteredDeviceModel nonWengaoModel
+	function includeNonWengaoDevice(_device, childItems) {
+		return childItems["WengaoShowUnavailable"]?.value !== 1
+	}
 
 	function _showSettingsPage(device) {
 		if (BackendConnection.serviceTypeFromUid(device.serviceUid) === "dcdc") {
@@ -70,7 +71,7 @@ Page {
 					width: parent.width
 					rightPadding: loadSummary.rightPadding
 					equalWidthColumns: true
-					model: root.wengaoModel.count > 0 ? root.wengaoModel : null
+					model: wengaoDevices.count > 0 ? wengaoDevices : null
 					delegate: Column {
 						id: wengaoDeviceRows
 
@@ -98,7 +99,7 @@ Page {
 						QuantityTable.TableRow {
 							table: wengaoTable
 							index: wengaoDeviceRows.index * 3 + 1
-							headerText: "A"
+							headerText: qsTr("Terminal A")
 							headerColor: Theme.color_font_secondary
 							model: QuantityObjectModel {
 								QuantityObject { unit: VenusOS.Units_Volt_DC; hidden: true }
@@ -110,7 +111,7 @@ Page {
 						QuantityTable.TableRow {
 							table: wengaoTable
 							index: wengaoDeviceRows.index * 3 + 2
-							headerText: "B"
+							headerText: qsTr("Terminal B")
 							headerColor: Theme.color_font_secondary
 							model: QuantityObjectModel {
 								QuantityObject { unit: VenusOS.Units_Volt_DC; hidden: true }
@@ -171,8 +172,8 @@ Page {
 	}
 
 	GradientListView {
-		header: root.wengaoModel.count > 0 ? headerComponent : null
-		model: root.nonWengaoModel
+		header: wengaoDevices.count > 0 ? headerComponent : null
+		model: nonWengaoDevices
 		delegate: LoadListDelegate {
 			id: deviceDelegate
 
@@ -184,7 +185,7 @@ Page {
 			temperature: temperatureItem.value ?? NaN
 			columnWidth: ListView.view.headerItem?.contentItem?.columnWidth ?? Theme.geometry_loadListPage_defaultColumnWidth
 			columnSpacing: ListView.view.headerItem?.contentItem?.columnSpacing ?? Theme.geometry_quantityTable_horizontalSpacing_large
-			unitAmps: root.wengaoModel.count === 0 && !isNaN(current)
+			unitAmps: wengaoDevices.count === 0 && !isNaN(current)
 				&& (Global.systemSettings.electricalPowerDisplay === VenusOS.ElectricalPowerDisplay_PreferAmps
 				 || Global.systemSettings.electricalPowerDisplay === VenusOS.ElectricalPowerDisplay_Mixed)
 			statusText: !statusItem.valid ? ""
@@ -208,5 +209,42 @@ Page {
 				serviceUid: deviceDelegate.device.serviceUid
 			}
 		}
+	}
+
+	// These models must belong to the detail page. Models owned by the overview widget are
+	// disabled when that page leaves the stack, which previously made this table empty.
+	VeQItemSortTableModel {
+		id: wengaoDevices
+		dynamicSortFilter: true
+		filterRole: VeQItemTableModel.ValueRole
+		filterFlags: VeQItemSortTableModel.FilterInvalid
+		sortColumn: orderedChildren.sortValueColumn
+
+		model: VeQItemChildModel {
+			id: orderedChildren
+			childId: "WengaoDisplayOrder"
+			model: VeQItemFilteredServiceModel {
+				serviceTypes: ["alternator", "dcsystem", "dcload", "dcdc", "motordrive"]
+			}
+			sortDelegate: VeQItemSortDelegate {
+				VeQuickItem {
+					id: displayOrderItem
+					uid: buddy.uid + "/WengaoDisplayOrder"
+				}
+				sortValue: displayOrderItem.valid ? displayOrderItem.value : 2147483647
+			}
+		}
+	}
+
+	FilteredDeviceModel {
+		id: nonWengaoDevices
+		serviceTypes: ["dcsystem", "dcload", "dcdc", "motordrive"]
+		childFilterIds: {
+			"dcsystem": ["WengaoShowUnavailable"],
+			"dcload": ["WengaoShowUnavailable"],
+			"dcdc": ["WengaoShowUnavailable"],
+			"motordrive": ["WengaoShowUnavailable"]
+		}
+		childFilterFunction: root.includeNonWengaoDevice
 	}
 }
