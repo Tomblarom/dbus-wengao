@@ -55,6 +55,11 @@ class DevicePermissions:
 
 
 @dataclass(frozen=True, slots=True)
+class AlarmConfig:
+    communication: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class AuxiliaryBatteryConfig:
     enabled: bool
     terminal: Terminal
@@ -104,6 +109,7 @@ class DeviceConfig:
     allowed_directions: tuple[Direction, ...]
     locked_direction: Direction | None
     permissions: DevicePermissions
+    alarms: AlarmConfig
     auxiliary_battery: AuxiliaryBatteryConfig | None
     write_limits: WriteLimits
     display_order: int = 0
@@ -216,6 +222,7 @@ def _parse_device(
         "allowed_directions",
         "locked_direction",
         "permissions",
+        "alarms",
         "auxiliary_battery",
         "write_limits",
     }
@@ -315,6 +322,7 @@ def _parse_device(
     if not isinstance(raw_permissions, dict):
         raise ConfigurationError(f"devices.{device_id}.permissions must be a table")
     permissions = _parse_permissions(raw_permissions, device_id)
+    alarms = _parse_alarm_config(raw.get("alarms"), device_id=device_id)
     if control_mode is ControlMode.MONITOR_ONLY and permissions.any_enabled():
         raise ConfigurationError(
             f"devices.{device_id} enables writes while control_mode is monitor-only"
@@ -372,6 +380,7 @@ def _parse_device(
         allowed_directions=directions,
         locked_direction=locked,
         permissions=permissions,
+        alarms=alarms,
         auxiliary_battery=auxiliary_battery,
         write_limits=write_limits,
         display_order=display_order,
@@ -504,6 +513,18 @@ def _parse_permissions(raw: dict[str, Any], device_id: str) -> DevicePermissions
         for name in names
     }
     return DevicePermissions(**values)
+
+
+def _parse_alarm_config(raw: object, *, device_id: str) -> AlarmConfig:
+    context = f"devices.{device_id}.alarms"
+    if raw is None:
+        return AlarmConfig()
+    if not isinstance(raw, dict):
+        raise ConfigurationError(f"{context} must be a table")
+    _reject_unknown(raw, {"communication"}, context)
+    return AlarmConfig(
+        communication=_boolean(raw.get("communication", True), f"{context}.communication")
+    )
 
 
 def _validate_cross_device(config: DriverConfig) -> None:

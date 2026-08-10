@@ -62,6 +62,7 @@
         },
         "locked_direction": {"enum": ["", "A-to-B", "B-to-A"]},
         "permissions": {"$ref": "#/$defs/permissions"},
+        "alarms": {"$ref": "#/$defs/alarms"},
         "write_limits": {"$ref": "#/$defs/writeLimits"},
         "auxiliary_battery": {"$ref": "#/$defs/auxiliaryBattery"}
       }
@@ -89,6 +90,13 @@
         "set_protection_limits": {"const": false},
         "calibration": {"const": false},
         "factory_reset": {"const": false}
+      }
+    },
+    "alarms": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "communication": {"type": "boolean", "default": true}
       }
     },
     "writeLimits": {

@@ -47,6 +47,14 @@ it identifies the Venus service and is not the display-order control.
 Leave `control_mode = "monitor-only"` unless external control is deliberately required. See
 `node-red.md` for the additional permission and range configuration.
 
+Communication loss is an alarm by default. For a converter that is intentionally absent at times,
+use the following per-device override instead of disabling the service or falsifying `/Connected`:
+
+```toml
+[devices.alarms]
+communication = false
+```
+
 Before enabling an auxiliary battery monitor, select the real house/system battery explicitly in
 Venus OS under the system battery-monitor setting. Do not leave this setting on automatic: if the
 primary battery later disconnects, an auxiliary or starter battery must not become the system

@@ -27,6 +27,11 @@ set_protection_limits = false
 calibration = false
 factory_reset = false
 
+# Keep this enabled when loss of an expected converter should raise a Venus alarm.
+# Disable it only for intentionally optional/intermittent devices. /Connected remains accurate.
+# [devices.alarms]
+# communication = true
+
 # Required only when the corresponding voltage/current permission is enabled.
 # Limits are per destination terminal and may only narrow the hardware limits.
 # [devices.write_limits]

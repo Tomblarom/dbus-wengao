@@ -48,6 +48,7 @@ def test_disabled_example_configuration_loads() -> None:
     assert device.control_mode is ControlMode.MONITOR_ONLY
     assert device.dvcc_policy is DvccPolicy.DISABLED
     assert not device.permissions.any_enabled()
+    assert device.alarms.communication is True
     assert device.auxiliary_battery is not None
     assert not device.auxiliary_battery.enabled
     assert config.display.unavailable_devices is UnavailableDeviceDisplay.HIDE
@@ -103,6 +104,16 @@ def test_display_order_follows_the_devices_array() -> None:
     second = valid_device(id="device-2", port="/dev/ttyS2", device_instance=41)
     parsed = parse_config(config_with(valid_device(), second))
     assert [device.display_order for device in parsed.devices] == [0, 1]
+
+
+def test_communication_alarm_can_be_disabled_per_device() -> None:
+    parsed = parse_config(config_with(valid_device(alarms={"communication": False})))
+    assert parsed.devices[0].alarms.communication is False
+
+
+def test_communication_alarm_must_be_boolean() -> None:
+    with pytest.raises(ConfigurationError, match=r"alarms\.communication"):
+        parse_config(config_with(valid_device(alarms={"communication": "false"})))
 
 
 def test_vehicle_battery_link_defaults_to_alternator_role() -> None:

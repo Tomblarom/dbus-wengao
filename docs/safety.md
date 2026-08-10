@@ -12,6 +12,11 @@ data, validates the model and reads measurements. It never writes during startup
 A placeholder contains no valid measurement, and write callbacks remain locked until the live
 device identity has been verified.
 
+Communication loss raises a Venus alarm by default. An intentionally optional or intermittently
+installed device may set `[devices.alarms] communication = false`; this suppresses only the
+communication alarm and communication-derived `ErrorCode`. `/Connected` remains `0`, measurements
+remain invalid, and real device faults are still reported when communication is available.
+
 Normal manual controls are available only after explicit opt-in. Supported writes are remote
 on/off (`0x0401`) and terminal voltage/current (`0x081A`, `0x081B`, `0x081D`, `0x081E`). Each
 request passes permission, destination-terminal, hardware and configured-range checks. Identical
