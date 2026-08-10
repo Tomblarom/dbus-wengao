@@ -22,6 +22,7 @@ PY
 UPSTREAM_REPOSITORY="$(manifest_value upstream_repository)"
 UPSTREAM_TAG="$(manifest_value upstream_tag)"
 UPSTREAM_COMMIT="$(manifest_value upstream_commit)"
+PATCH_ID="$(manifest_value patch_id)"
 
 if [[ ! "$UPSTREAM_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
     echo "Invalid pinned GUIv2 commit: $UPSTREAM_COMMIT" >&2
@@ -54,6 +55,9 @@ patch --batch --directory="$SOURCE_ROOT" --strip=1 < "$BATTERY_WIDGET_PATCH"
     cd "$SOURCE_ROOT"
     bash scripts/build-wasm.sh
 )
+
+python3 "$SCRIPT_DIR/cache_bust.py" \
+    "$SOURCE_ROOT/build-wasm_files_to_copy/wasm/index.html" "$PATCH_ID"
 
 if [[ "$OUTPUT_ROOT" != "$REPO_ROOT/dist/gui-v2" ]]; then
     echo "Refusing to replace unexpected output path: $OUTPUT_ROOT" >&2
