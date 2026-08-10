@@ -1,4 +1,4 @@
-# Optional GUIv2 DC-load breakdown
+# Optional GUIv2 overview additions
 
 Victron GUIv2 intentionally aggregates all `dcsystem`, `dcload` and `dcdc` services into one
 **DC Loads** overview widget. Its native detail page already lists the individual services. The
@@ -25,6 +25,13 @@ out. Other Victron DC devices retain their native behaviour.
 The driver publishes the normalized display value separately as `/Wengao/DcLoadPower`. This does
 not change standard role measurements, Venus system calculations, permissions or Modbus
 communication.
+
+Victron's standard overview battery widget shows only the selected system battery even when
+`com.victronenergy.system/Batteries` contains additional monitors. The overlay keeps that widget
+and adds a compact row for each non-system Wengao auxiliary battery. It uses the configured battery
+name and Victron's standard small battery font and voltage quantity. An unavailable monitor remains
+visible as `-- V`; it is not promoted to system battery and no voltage is fabricated or retained.
+Clicking the widget continues to open Victron's native battery list.
 
 ## Compatibility boundary
 

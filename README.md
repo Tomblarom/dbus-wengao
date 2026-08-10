@@ -37,6 +37,10 @@ With `[display] unavailable_devices = "zero"`, that auxiliary battery remains pr
 native battery list while the converter is offline. It stays marked disconnected and shows an
 unavailable voltage instead of a fabricated or stale measurement.
 
+The optional version-pinned GUIv2 overlay also adds non-system Wengao auxiliary batteries as
+compact voltage rows to Victron's existing overview battery widget. This does not change the
+selected system battery or create a second energy-system battery.
+
 ## Development
 
 ```sh
