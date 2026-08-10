@@ -84,7 +84,10 @@ Copy the verified artifact to Venus OS and run:
 Before replacement, the installer verifies the package version, embedded manifest and uncompressed
 WASM checksum. It stores the original web GUI under
 `/data/setupOptions/WengaoDcdc/gui-v2/backups/`, then atomically replaces the web files and restarts
-`vrmlogger`. Browser caches may require a hard reload.
+`vrmlogger`. The build stamps JavaScript, WebAssembly and its metadata requests with the overlay
+revision, preventing a reloaded browser from reusing files from an older overlay. A Remote Console
+tab that was already open during installation still has the old WebAssembly in memory and must be
+reloaded once; server-side replacement cannot modify code already running in a browser tab.
 
 Rollback is explicit:
 
