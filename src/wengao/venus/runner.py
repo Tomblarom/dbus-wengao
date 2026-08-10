@@ -104,7 +104,12 @@ def run_service(config_path: Path, device_id: str) -> int:
         auxiliary_backend = runtime.service_class(
             auxiliary_battery_service_name(config), register=False
         )
-        auxiliary_publisher = AuxiliaryBatteryPublisher(auxiliary_backend, config, None)
+        auxiliary_publisher = AuxiliaryBatteryPublisher(
+            auxiliary_backend,
+            config,
+            None,
+            show_unavailable=show_unavailable,
+        )
 
     main_loop = runtime.glib.MainLoop()
     stopping = False

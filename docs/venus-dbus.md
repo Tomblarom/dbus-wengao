@@ -80,6 +80,12 @@ monitor as the system measurement. Select the real system battery explicitly in 
 enabling an auxiliary monitor. If that selected service disappears, Venus must report the system
 battery as unavailable instead of falling back to the auxiliary battery.
 
+With `[display] unavailable_devices = "zero"`, an unavailable auxiliary monitor remains in
+Victron's native battery list. It keeps `/Connected = 0` and publishes IEEE `NaN` at
+`/Dc/0/Voltage`, which Venus treats as a present battery with an unavailable numeric value. No
+voltage is invented and no stale measurement is retained. The default `"hide"` policy invalidates
+the voltage normally, allowing Victron to remove the unavailable monitor from its battery list.
+
 ## Unavailable-device display
 
 `[display] unavailable_devices = "zero"` registers a validated converter service before the first
