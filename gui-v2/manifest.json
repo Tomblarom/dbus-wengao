@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "patch_id": "dc-load-breakdown-v2",
+  "patch_id": "overview-breakdowns-v3",
   "upstream_repository": "https://github.com/victronenergy/gui-v2.git",
   "upstream_tag": "v1.3.14",
   "upstream_commit": "c8f5a14353d1c6dc7554cbc8bf5d167af8fd00d7",

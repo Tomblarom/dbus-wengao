@@ -1,0 +1,52 @@
+--- a/components/widgets/BatteryWidget.qml
++++ b/components/widgets/BatteryWidget.qml
+@@ -40,5 +40,9 @@ OverviewWidget {
+ 	readonly property int _normalizedStateOfCharge: Math.round(Global.system.battery.stateOfCharge || 0)
+ 	readonly property bool _animationReady: animationEnabled && !isNaN(Global.system.battery.stateOfCharge)
++	readonly property var _secondaryBatteries: batteries.valid
++			? batteries.value.filter((battery) => !battery.active_battery_service
++					&& battery.id.startsWith("com.victronenergy.battery.wengao_"))
++			: []
+ 
+ 	VeQuickItem {
+ 		id: batteries
+@@ -218,6 +222,39 @@ OverviewWidget {
+ 						  : "qrc:/images/icon_charging_grid.svg"
+ 			}
+ 		}
++
++		ColumnLayout {
++			visible: root._secondaryBatteries.length > 0
++			spacing: 0
++			Layout.fillWidth: true
++
++			Repeater {
++				model: root._secondaryBatteries
++
++				delegate: RowLayout {
++					required property var modelData
++
++					spacing: Theme.geometry_quantityLabel_spacing
++					Layout.fillWidth: true
++
++					Label {
++						text: modelData.name + ":"
++						elide: Text.ElideRight
++						color: Theme.color_overviewPage_widget_battery_font_secondary
++						font.pixelSize: Theme.font_overviewPage_battery_small
++						Layout.fillWidth: true
++					}
++
++					QuantityLabel {
++						value: modelData.voltage ?? NaN
++						unit: VenusOS.Units_Volt_DC
++						unitColor: Theme.color_overviewPage_widget_battery_font_secondary
++						font.pixelSize: Theme.font_overviewPage_battery_small
++						alignment: Qt.AlignRight
++					}
++				}
++			}
++		}
+ 
+ 		Item {
+ 			Layout.fillWidth: true

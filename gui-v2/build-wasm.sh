@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST="$SCRIPT_DIR/manifest.json"
 WIDGET_OVERLAY="$SCRIPT_DIR/overlay/components/widgets/DcLoadsWidget.qml"
 LIST_PAGE_OVERLAY="$SCRIPT_DIR/overlay/pages/loads/DcLoadListPage.qml"
+BATTERY_WIDGET_PATCH="$SCRIPT_DIR/patches/battery-widget-secondary-batteries.patch"
 OUTPUT_ROOT="$REPO_ROOT/dist/gui-v2"
 
 manifest_value() {
@@ -48,6 +49,7 @@ fi
 
 install -m 0644 "$WIDGET_OVERLAY" "$SOURCE_ROOT/components/widgets/DcLoadsWidget.qml"
 install -m 0644 "$LIST_PAGE_OVERLAY" "$SOURCE_ROOT/pages/loads/DcLoadListPage.qml"
+patch --batch --directory="$SOURCE_ROOT" --strip=1 < "$BATTERY_WIDGET_PATCH"
 (
     cd "$SOURCE_ROOT"
     bash scripts/build-wasm.sh

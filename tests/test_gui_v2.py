@@ -12,7 +12,7 @@ def test_gui_manifest_pins_the_validated_venus_version() -> None:
     manifest = json.loads((GUI_ROOT / "manifest.json").read_text(encoding="utf-8"))
     assert manifest == {
         "schema_version": 1,
-        "patch_id": "dc-load-breakdown-v2",
+        "patch_id": "overview-breakdowns-v3",
         "upstream_repository": "https://github.com/victronenergy/gui-v2.git",
         "upstream_tag": "v1.3.14",
         "upstream_commit": "c8f5a14353d1c6dc7554cbc8bf5d167af8fd00d7",
@@ -63,10 +63,24 @@ def test_dc_load_detail_page_uses_the_same_offline_zero_policy() -> None:
     assert "power: displayOfflineAsZero ? 0" in page
 
 
-def test_gui_build_installs_widget_and_detail_overlays() -> None:
+def test_battery_widget_patch_lists_wengao_secondary_batteries() -> None:
+    patch = (GUI_ROOT / "patches" / "battery-widget-secondary-batteries.patch").read_text(
+        encoding="utf-8"
+    )
+    assert "_secondaryBatteries" in patch
+    assert "!battery.active_battery_service" in patch
+    assert 'battery.id.startsWith("com.victronenergy.battery.wengao_")' in patch
+    assert "modelData.name" in patch
+    assert "modelData.voltage ?? NaN" in patch
+    assert "Theme.font_overviewPage_battery_small" in patch
+
+
+def test_gui_build_installs_all_overlays() -> None:
     build_script = (GUI_ROOT / "build-wasm.sh").read_text(encoding="utf-8")
     assert '"$WIDGET_OVERLAY" "$SOURCE_ROOT/components/widgets/DcLoadsWidget.qml"' in build_script
     assert '"$LIST_PAGE_OVERLAY" "$SOURCE_ROOT/pages/loads/DcLoadListPage.qml"' in build_script
+    assert 'patch --batch --directory="$SOURCE_ROOT" --strip=1' in build_script
+    assert '"$BATTERY_WIDGET_PATCH"' in build_script
 
 
 def test_uninstall_restores_an_active_gui_before_removing_the_app() -> None:

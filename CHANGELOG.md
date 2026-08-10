@@ -19,3 +19,4 @@ first public release is made.
 - Exit main and log supervisors cleanly when regenerating daemontools services.
 - Include alternator-role Wengao devices in the DC-load breakdown with direction-aware power.
 - Keep configured auxiliary batteries in Victron's native battery list while unavailable.
+- Show non-system Wengao auxiliary batteries in the existing overview battery widget.
