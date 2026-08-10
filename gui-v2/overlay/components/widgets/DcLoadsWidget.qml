@@ -13,19 +13,15 @@ import Victron.VenusOS
 OverviewWidget {
 	id: root
 
-	function includeLoadDevice(_device, childItems) {
-		const policy = childItems["WengaoShowUnavailable"]
-		if (!policy || policy.value === undefined) {
-			return true
-		}
-		const connected = childItems["Connected"]
-		return policy.value === 1 || connected?.value === 1
+	function includeNonWengaoDevice(_device, childItems) {
+		const marker = childItems["WengaoShowUnavailable"]
+		return !marker || !marker.valid
 	}
 
 	//% "DC Loads"
 	title: qsTrId("overview_widget_dcloads_title")
 	type: VenusOS.OverviewWidget_Type_DcLoads
-	enabled: systemLoadDevices.count > 1 || nonSystemLoadDevices.count > 0 || loadDevices.count > 0
+	enabled: loadDevices.count > 0 || nonWengaoLoadDevices.count > 0
 	preferredSize: loadDevices.count > 1 ? VenusOS.OverviewWidget_PreferredSize_PreferLarge : VenusOS.OverviewWidget_PreferredSize_Any
 
 	contentItem: ColumnLayout {
@@ -132,8 +128,8 @@ OverviewWidget {
 	onClicked: {
 		Global.pageManager.pushPage("/pages/loads/DcLoadListPage.qml", {
 			title: root.title,
-			systemModel: systemLoadDevices,
-			nonSystemModel: nonSystemLoadDevices
+			wengaoModel: loadDevices,
+			nonWengaoModel: nonWengaoLoadDevices
 		});
 	}
 
@@ -141,6 +137,7 @@ OverviewWidget {
 		id: loadDevices
 		dynamicSortFilter: true
 		filterRole: VeQItemTableModel.ValueRole
+		filterFlags: VeQItemSortTableModel.FilterInvalid
 		sortColumn: orderedChildren.sortValueColumn
 
 		model: VeQItemChildModel {
@@ -160,20 +157,14 @@ OverviewWidget {
 	}
 
 	FilteredDeviceModel {
-		id: systemLoadDevices
-		serviceTypes: ["dcsystem"]
-		childFilterIds: { "dcsystem": ["Connected", "WengaoShowUnavailable"] }
-		childFilterFunction: root.includeLoadDevice
-	}
-
-	FilteredDeviceModel {
-		id: nonSystemLoadDevices
-		serviceTypes: ["dcload", "dcdc", "motordrive"]
+		id: nonWengaoLoadDevices
+		serviceTypes: ["dcsystem", "dcload", "dcdc", "motordrive"]
 		childFilterIds: {
-			"dcload": ["Connected", "WengaoShowUnavailable"],
-			"dcdc": ["Connected", "WengaoShowUnavailable"],
-			"motordrive": ["Connected", "WengaoShowUnavailable"]
+			"dcsystem": ["WengaoShowUnavailable"],
+			"dcload": ["WengaoShowUnavailable"],
+			"dcdc": ["WengaoShowUnavailable"],
+			"motordrive": ["WengaoShowUnavailable"]
 		}
-		childFilterFunction: root.includeLoadDevice
+		childFilterFunction: root.includeNonWengaoDevice
 	}
 }

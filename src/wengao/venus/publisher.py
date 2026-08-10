@@ -132,9 +132,11 @@ class VenusPublisher:
             "/Wengao/DcLoadPower": None,
             "/Wengao/TerminalA/Voltage": None,
             "/Wengao/TerminalA/Current": None,
+            "/Wengao/TerminalA/SignedCurrent": None,
             "/Wengao/TerminalA/Power": None,
             "/Wengao/TerminalB/Voltage": None,
             "/Wengao/TerminalB/Current": None,
+            "/Wengao/TerminalB/SignedCurrent": None,
             "/Wengao/TerminalB/Power": None,
         }
         runtime_paths = {
@@ -150,9 +152,11 @@ class VenusPublisher:
             "/Wengao/DcLoadPower",
             "/Wengao/TerminalA/Voltage",
             "/Wengao/TerminalA/Current",
+            "/Wengao/TerminalA/SignedCurrent",
             "/Wengao/TerminalA/Power",
             "/Wengao/TerminalB/Voltage",
             "/Wengao/TerminalB/Current",
+            "/Wengao/TerminalB/SignedCurrent",
             "/Wengao/TerminalB/Power",
         }
         for path, value in static.items():
@@ -213,6 +217,7 @@ class VenusPublisher:
         self._set("/Wengao/RmtVoltage", snapshot.rmt_voltage_v)
         self._publish_raw_terminal("A", snapshot.terminal_a)
         self._publish_raw_terminal("B", snapshot.terminal_b)
+        self._publish_signed_terminal_currents(snapshot, direction)
         if allowed and direction is not None:
             system = _system_measurements(snapshot, self._config.system_terminal)
             outward_power = (
@@ -378,6 +383,24 @@ class VenusPublisher:
         self._set(f"/Wengao/Terminal{terminal}/Current", values.current_a)
         self._set(f"/Wengao/Terminal{terminal}/Power", values.power_w)
 
+    def _publish_signed_terminal_currents(
+        self, snapshot: RealtimeSnapshot, direction: Direction | None
+    ) -> None:
+        if direction is None:
+            self._set("/Wengao/TerminalA/SignedCurrent", None)
+            self._set("/Wengao/TerminalB/SignedCurrent", None)
+            return
+        terminal_a_sign = -1 if direction is Direction.A_TO_B else 1
+        terminal_b_sign = -terminal_a_sign
+        self._set(
+            "/Wengao/TerminalA/SignedCurrent",
+            _without_negative_zero(terminal_a_sign * snapshot.terminal_a.current_a),
+        )
+        self._set(
+            "/Wengao/TerminalB/SignedCurrent",
+            _without_negative_zero(terminal_b_sign * snapshot.terminal_b.current_a),
+        )
+
     def _add(
         self,
         path: str,
@@ -533,6 +556,10 @@ def _system_outward_sign(direction: Direction, system_terminal: Terminal) -> int
         direction is Direction.B_TO_A and system_terminal is Terminal.B
     )
     return 1 if leaves_system else -1
+
+
+def _without_negative_zero(value: float) -> float:
+    return 0.0 if value == 0 else value
 
 
 def _venus_state(charging_state: int) -> int:

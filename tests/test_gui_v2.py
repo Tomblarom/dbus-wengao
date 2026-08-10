@@ -12,7 +12,7 @@ def test_gui_manifest_pins_the_validated_venus_version() -> None:
     manifest = json.loads((GUI_ROOT / "manifest.json").read_text(encoding="utf-8"))
     assert manifest == {
         "schema_version": 1,
-        "patch_id": "overview-breakdowns-v3",
+        "patch_id": "overview-breakdowns-v4",
         "upstream_repository": "https://github.com/victronenergy/gui-v2.git",
         "upstream_tag": "v1.3.14",
         "upstream_commit": "c8f5a14353d1c6dc7554cbc8bf5d167af8fd00d7",
@@ -41,10 +41,14 @@ def test_dc_load_widget_lists_each_device_and_its_power() -> None:
     assert 'uid: deviceDelegate.serviceUid + "/Wengao/DcLoadPower"' in widget
     assert "!dcLoadPowerItem.valid" in widget
     assert 'uid: deviceDelegate.serviceUid + "/WengaoShowUnavailable"' in widget
-    assert '"dcsystem": ["Connected", "WengaoShowUnavailable"]' in widget
+    assert 'filterFlags: VeQItemSortTableModel.FilterInvalid' in widget
+    assert 'id: nonWengaoLoadDevices' in widget
+    assert '"dcsystem": ["WengaoShowUnavailable"]' in widget
+    assert 'childFilterFunction: root.includeNonWengaoDevice' in widget
     assert "sourceType: VenusOS.ElectricalQuantity_Source_Any" in widget
     assert 'childId: "WengaoDisplayOrder"' in widget
     assert "sortColumn: orderedChildren.sortValueColumn" in widget
+    assert "wengaoModel: loadDevices" in widget
 
 
 def test_gui_overlay_contains_no_installation_specific_identity() -> None:
@@ -53,14 +57,21 @@ def test_gui_overlay_contains_no_installation_specific_identity() -> None:
         assert not re.search(r"wengao[_-]\d|/dev/|192\.168\.", content, re.IGNORECASE)
 
 
-def test_dc_load_detail_page_uses_the_same_offline_zero_policy() -> None:
+def test_dc_load_detail_page_uses_ordered_wengao_rows_and_terminal_currents() -> None:
     page = (GUI_ROOT / "overlay" / "pages" / "loads" / "DcLoadListPage.qml").read_text(
         encoding="utf-8"
     )
     assert "This code is based on Victron Energy code" in page
-    assert page.count("displayOfflineAsZero") >= 4
-    assert page.count('WengaoShowUnavailable"') == 2
-    assert "power: displayOfflineAsZero ? 0" in page
+    assert "required property var wengaoModel" in page
+    assert "model: root.wengaoModel.count > 0 ? root.wengaoModel : null" in page
+    assert "wengaoDeviceRows.index * 3" in page
+    assert 'headerText: "A"' in page
+    assert 'headerText: "B"' in page
+    assert '/Wengao/TerminalA/SignedCurrent' in page
+    assert '/Wengao/TerminalB/SignedCurrent' in page
+    assert "displayOfflineAsZero" in page
+    assert "|| !dcLoadPowerItem.valid ? 0" in page
+    assert "model: root.nonWengaoModel" in page
 
 
 def test_battery_widget_patch_lists_wengao_secondary_batteries() -> None:

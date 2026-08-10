@@ -233,6 +233,20 @@ def test_dc_system_sign_is_positive_when_power_leaves_system_terminal() -> None:
     assert service.values["/Dc/0/Power"] == 47
 
 
+def test_terminal_currents_are_positive_for_charge_and_negative_for_discharge() -> None:
+    service, publisher = create_publisher(device_config())
+
+    publisher.publish(snapshot(mode=4))
+    assert service.values["/Wengao/TerminalA/Current"] == 0.84
+    assert service.values["/Wengao/TerminalB/Current"] == 3.71
+    assert service.values["/Wengao/TerminalA/SignedCurrent"] == -0.84
+    assert service.values["/Wengao/TerminalB/SignedCurrent"] == 3.71
+
+    publisher.publish(snapshot(mode=5))
+    assert service.values["/Wengao/TerminalA/SignedCurrent"] == 0.84
+    assert service.values["/Wengao/TerminalB/SignedCurrent"] == -3.71
+
+
 def test_dc_system_sign_is_negative_when_power_enters_system_terminal() -> None:
     service, publisher = create_publisher(device_config(system_terminal="B"))
     publisher.publish(snapshot(mode=4))
@@ -316,6 +330,8 @@ def test_unknown_direction_is_not_assumed() -> None:
     assert service.values["/Wengao/Direction"] is None
     assert service.values["/Wengao/DirectionAllowed"] is None
     assert service.values["/Dc/0/Current"] is None
+    assert service.values["/Wengao/TerminalA/SignedCurrent"] is None
+    assert service.values["/Wengao/TerminalB/SignedCurrent"] is None
 
 
 def test_disconnect_invalidates_measurements_and_marks_alarm() -> None:
@@ -326,6 +342,8 @@ def test_disconnect_invalidates_measurements_and_marks_alarm() -> None:
     assert service.values["/Alarms/Communication"] == 2
     assert service.values["/Dc/0/Voltage"] is None
     assert service.values["/Wengao/TerminalA/Voltage"] is None
+    assert service.values["/Wengao/TerminalA/SignedCurrent"] is None
+    assert service.values["/Wengao/TerminalB/SignedCurrent"] is None
     assert service.values["/Wengao/DcLoadPower"] is None
     assert service.values["/State"] == 0
 
