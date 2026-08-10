@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -19,6 +20,7 @@ DEFAULT_CONFIG = Path("/data/setupOptions/WengaoDcdc/config.toml")
 DEFAULT_LINK_ROOT = Path("/service")
 SERIAL_STARTER_STOP = Path("/opt/victronenergy/serial-starter/stop-tty.sh")
 SERIAL_STARTER_STOP_TIMEOUT = 5.0
+SUPERVISOR_EXIT_TIMEOUT = 5.0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -75,7 +77,7 @@ def disable_services(*, app_root: Path, link_root: Path) -> tuple[str, ...]:
             continue
         if not _points_within(link, generated_root):
             continue
-        _stop(link)
+        _stop_service_tree(link)
         link.unlink()
         removed.append(link.name)
     return tuple(sorted(removed))
@@ -88,7 +90,7 @@ def _synchronise_links(generated_root: Path, link_root: Path, desired: frozenset
         if link.name in desired:
             continue
         if link.is_symlink() and _points_within(link, generated_root):
-            _stop(link)
+            _stop_service_tree(link)
             link.unlink()
     for name in sorted(desired):
         target = generated_root / name
@@ -99,6 +101,7 @@ def _synchronise_links(generated_root: Path, link_root: Path, desired: frozenset
             if link.resolve() == target.resolve():
                 _start(link)
                 continue
+            _stop_service_tree(link)
             link.unlink()
         link.symlink_to(target, target_is_directory=True)
         _start(link)
@@ -151,11 +154,45 @@ def _stop(service: Path) -> None:
     if svc is None:
         return
     subprocess.run(
-        [svc, "-d", os.fspath(service)],
+        [svc, "-dx", os.fspath(service)],
         check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    if _wait_for_supervisor_exit(service):
+        return
+    subprocess.run(
+        [svc, "-kx", os.fspath(service)],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    _wait_for_supervisor_exit(service)
+
+
+def _stop_service_tree(service: Path) -> None:
+    # Stop the producer before its logger, and ask both supervise processes to exit. Merely
+    # unlinking the service leaves orphaned log supervisors holding the multilog directory lock.
+    _stop(service)
+    _stop(service / "log")
+
+
+def _wait_for_supervisor_exit(service: Path) -> bool:
+    svok = shutil.which("svok")
+    if svok is None:
+        return True
+    deadline = time.monotonic() + SUPERVISOR_EXIT_TIMEOUT
+    while time.monotonic() < deadline:
+        result = subprocess.run(
+            [svok, os.fspath(service)],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if result.returncode != 0:
+            return True
+        time.sleep(0.05)
+    return False
 
 
 def _start(service: Path) -> None:

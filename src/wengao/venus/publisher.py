@@ -104,13 +104,15 @@ class VenusPublisher:
 
     def _add_common_paths(self, identity: DeviceIdentity | None, *, show_unavailable: bool) -> None:
         connected = identity is not None
+        communication_error = int(not connected and self._config.alarms.communication)
+        communication_alarm = 2 if communication_error else 0
         static: dict[str, object] = {
             "/CustomName": self._config.custom_name,
             "/Serial": identity.serial_number if identity else None,
             "/Mode": 1 if self._config.control_mode is ControlMode.MONITOR_ONLY else None,
             "/State": 0,
-            "/ErrorCode": 0 if connected else 1,
-            "/Alarms/Communication": 0 if connected else 2,
+            "/ErrorCode": communication_error,
+            "/Alarms/Communication": communication_alarm,
             "/Wengao/Model": identity.model if identity else None,
             "/Wengao/ProtocolVersion": identity.protocol_version if identity else None,
             "/WengaoShowUnavailable": int(show_unavailable),
@@ -222,9 +224,10 @@ class VenusPublisher:
 
     def mark_disconnected(self) -> None:
         self._set("/Connected", 0)
-        self._set("/Alarms/Communication", 2)
+        communication_error = int(self._config.alarms.communication)
+        self._set("/Alarms/Communication", 2 if communication_error else 0)
         self._set("/State", 0)
-        self._set("/ErrorCode", 1)
+        self._set("/ErrorCode", communication_error)
         if not self._show_unavailable:
             self._set("/WengaoDisplayOrder", None)
         for path in self._dynamic_paths:
@@ -410,6 +413,7 @@ class AuxiliaryBatteryPublisher:
         self._config: AuxiliaryBatteryConfig = auxiliary
         self._cache: dict[str, object] = {}
         connected = identity is not None
+        communication_alarm = 2 if not connected and config.alarms.communication else 0
         serial = _auxiliary_serial(identity, auxiliary.terminal)
         values: dict[str, object] = {
             "/Mgmt/ProcessName": "dbus-wengao",
@@ -428,7 +432,7 @@ class AuxiliaryBatteryPublisher:
             "/Dc/0/Power": None,
             "/Dc/0/Temperature": None,
             "/Soc": None,
-            "/Alarms/Communication": 0 if connected else 2,
+            "/Alarms/Communication": communication_alarm,
             "/Wengao/SourceDevice": config.id,
             "/Wengao/Terminal": auxiliary.terminal.value,
         }
@@ -458,7 +462,7 @@ class AuxiliaryBatteryPublisher:
 
     def mark_disconnected(self) -> None:
         self._set("/Connected", 0)
-        self._set("/Alarms/Communication", 2)
+        self._set("/Alarms/Communication", 2 if self._device_config.alarms.communication else 0)
         for path in (
             "/Dc/0/Voltage",
             "/Dc/0/Current",

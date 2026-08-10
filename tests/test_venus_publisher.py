@@ -63,6 +63,7 @@ def device_config(
     control_mode: str = "monitor-only",
     permissions: dict[str, bool] | None = None,
     write_limits: dict[str, object] | None = None,
+    alarms: dict[str, bool] | None = None,
 ) -> DeviceConfig:
     if directions is None:
         directions = ["A-to-B", "B-to-A"]
@@ -84,6 +85,7 @@ def device_config(
                 "allowed_directions": directions,
                 "locked_direction": locked,
                 "permissions": permissions or {},
+                **({"alarms": alarms} if alarms is not None else {}),
                 **({"write_limits": write_limits} if write_limits is not None else {}),
                 **(
                     {"auxiliary_battery": auxiliary_battery}
@@ -146,6 +148,34 @@ def test_unavailable_placeholder_is_explicit_and_contains_no_false_measurement()
     assert service.values["/Serial"] == "PRIVATE-SERIAL"
     publisher.mark_disconnected()
     assert service.values["/Serial"] == "PRIVATE-SERIAL"
+
+
+def test_optional_unavailable_device_suppresses_only_communication_faults() -> None:
+    config = device_config(
+        alarms={"communication": False},
+        auxiliary_battery={
+            "enabled": True,
+            "terminal": "A",
+            "device_instance": 80,
+            "custom_name": "Auxiliary battery",
+        },
+    )
+    service = FakeService()
+    publisher = VenusPublisher(service, config, None, show_unavailable=True)
+    assert service.values["/Connected"] == 0
+    assert service.values["/ErrorCode"] == 0
+    assert service.values["/Alarms/Communication"] == 0
+    publisher.mark_disconnected()
+    assert service.values["/Connected"] == 0
+    assert service.values["/ErrorCode"] == 0
+    assert service.values["/Alarms/Communication"] == 0
+
+    auxiliary_service = FakeService()
+    auxiliary = AuxiliaryBatteryPublisher(auxiliary_service, config, None)
+    assert auxiliary_service.values["/Connected"] == 0
+    assert auxiliary_service.values["/Alarms/Communication"] == 0
+    auxiliary.mark_disconnected()
+    assert auxiliary_service.values["/Alarms/Communication"] == 0
 
 
 def test_service_name_uses_role_and_dbus_safe_device_id() -> None:

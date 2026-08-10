@@ -15,3 +15,5 @@ first public release is made.
 - Order Wengao overview rows by their device-table position in the local configuration.
 - Publish vehicle-battery links as stable alternator services by default.
 - Add opt-in, range-limited and readback-verified D-Bus controls for Node-RED.
+- Add a per-device communication-alarm policy for intentionally optional converters.
+- Exit main and log supervisors cleanly when regenerating daemontools services.

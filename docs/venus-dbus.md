@@ -53,6 +53,10 @@ the standard role paths and do not replace them. When communication is lost:
 - measurements and raw runtime data become invalid rather than remaining stale;
 - the process keeps retrying without changing device settings.
 
+For an intentionally optional device, `[devices.alarms] communication = false` keeps
+`/Alarms/Communication` and the communication-derived `/ErrorCode` at `0` while disconnected.
+`/Connected = 0` and invalid measurements continue to describe the unavailable state accurately.
+
 `/WengaoDisplayOrder` contains the device's position in `config.toml`. It is display metadata,
 not a Victron DeviceInstance. The GUI overlay sorts Wengao DC-load rows by this value.
 
@@ -74,8 +78,8 @@ battery as unavailable instead of falling back to the auxiliary battery.
 ## Unavailable-device display
 
 `[display] unavailable_devices = "zero"` registers a validated converter service before the first
-successful hardware read. It contains `/Connected = 0`, a communication alarm and no valid
-measurements. The GUI uses the separate `/WengaoShowUnavailable` policy path to render `0 W` for
-that disconnected row. Standard `/Dc/0/*` values remain invalid, so system calculations never
-receive an invented zero measurement. The default `"hide"` retains the original discovery-first
-behaviour.
+successful hardware read. It contains `/Connected = 0` and no valid measurements. Communication
+alarm behaviour remains the device's explicit alarm policy. The GUI uses the separate
+`/WengaoShowUnavailable` policy path to render `0 W` for that disconnected row. Standard
+`/Dc/0/*` values remain invalid, so system calculations never receive an invented zero
+measurement. The default `"hide"` retains the original discovery-first behaviour.
