@@ -17,10 +17,12 @@ the overview page, so navigating away from the overview cannot empty or reorder 
 `device_instance` remains independent.
 
 The Total table includes every configured Wengao role, including `alternator`, so a vehicle-battery
-link remains present when unavailable under the `"zero"` policy. Each device row is followed by
-terminal A and terminal B current rows. Their battery-oriented sign convention is charging
-positive and discharging negative. Unknown offline currents remain `-- A`; only the configured
-offline DC-load power is rendered as `0 W`.
+link remains present when unavailable under the `"zero"` policy. Every device occupies exactly two
+rows, named `<device> (A)` and `<device> (B)`, with the physical terminal voltage and signed current.
+Their battery-oriented sign convention is charging positive and discharging negative. The
+normalized DC-load power is shown only on the configured system-terminal row, so it is never
+duplicated. Unknown offline measurements remain invalid; only the configured offline DC-load power
+is rendered as `0 W`.
 
 The overview layout follows the pinned Victron `AcWidgetContent` and `ThreePhaseDisplay` patterns:
 the normal large primary-colour total remains in its original position, while device names and

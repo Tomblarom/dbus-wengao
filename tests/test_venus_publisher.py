@@ -133,6 +133,7 @@ def test_paths_are_added_before_service_registration() -> None:
     assert service.events[-1][0] == "register"
     assert "/Connected" in service.values
     assert "/Dc/0/Power" in service.values
+    assert service.values["/Wengao/SystemTerminal"] == "B"
     assert not any(path.startswith("/Link/") for path in service.values)
     assert not any(service.writeable.values())
 
@@ -144,6 +145,7 @@ def test_unavailable_placeholder_is_explicit_and_contains_no_false_measurement()
     assert service.values["/Connected"] == 0
     assert service.values["/Alarms/Communication"] == 2
     assert service.values["/WengaoShowUnavailable"] == 1
+    assert service.values["/Wengao/SystemTerminal"] == "B"
     assert service.values["/Dc/0/Power"] is None
     publisher.publish_identity(identity())
     assert service.values["/Serial"] == "PRIVATE-SERIAL"

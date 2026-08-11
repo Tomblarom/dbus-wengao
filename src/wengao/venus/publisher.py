@@ -118,6 +118,7 @@ class VenusPublisher:
             "/Wengao/ProtocolVersion": identity.protocol_version if identity else None,
             "/WengaoShowUnavailable": int(show_unavailable),
             "/WengaoDisplayOrder": self._config.display_order,
+            "/Wengao/SystemTerminal": self._config.system_terminal.value,
             "/Wengao/Control/WritesEnabled": int(self._config.permissions.any_enabled()),
             "/Wengao/Control/LastResult": "never",
             "/Wengao/Direction": None,

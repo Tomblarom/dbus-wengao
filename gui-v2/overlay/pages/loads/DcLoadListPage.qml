@@ -78,6 +78,8 @@ Page {
 						required property int index
 						required property VeQItem item
 						readonly property string serviceUid: item.itemParent().uid
+						readonly property string displayName: customNameItem.value
+								|| productNameItem.value || serviceUid
 						readonly property bool displayOfflineAsZero: showUnavailableItem.valid
 								&& showUnavailableItem.value === 1
 								&& connectedItem.value !== 1
@@ -87,36 +89,33 @@ Page {
 
 						QuantityTable.TableRow {
 							table: wengaoTable
-							index: wengaoDeviceRows.index * 3
-							headerText: customNameItem.value || productNameItem.value || wengaoDeviceRows.serviceUid
+							index: wengaoDeviceRows.index * 2
+							headerText: wengaoDeviceRows.displayName + " (A)"
 							model: QuantityObjectModel {
-								QuantityObject { object: dcDevice; key: "voltage"; unit: VenusOS.Units_Volt_DC }
-								QuantityObject { object: dcDevice; key: "current"; unit: VenusOS.Units_Amp }
-								QuantityObject { object: displayDevice; key: "power"; unit: VenusOS.Units_Watt }
-							}
-						}
-
-						QuantityTable.TableRow {
-							table: wengaoTable
-							index: wengaoDeviceRows.index * 3 + 1
-							headerText: qsTr("Terminal A")
-							headerColor: Theme.color_font_secondary
-							model: QuantityObjectModel {
-								QuantityObject { unit: VenusOS.Units_Volt_DC; hidden: true }
+								QuantityObject { object: terminalAVoltageItem; unit: VenusOS.Units_Volt_DC }
 								QuantityObject { object: terminalACurrentItem; unit: VenusOS.Units_Amp }
-								QuantityObject { unit: VenusOS.Units_Watt; hidden: true }
+								QuantityObject {
+									object: displayDevice
+									key: "terminalAPower"
+									unit: VenusOS.Units_Watt
+									hidden: systemTerminalItem.value !== "A"
+								}
 							}
 						}
 
 						QuantityTable.TableRow {
 							table: wengaoTable
-							index: wengaoDeviceRows.index * 3 + 2
-							headerText: qsTr("Terminal B")
-							headerColor: Theme.color_font_secondary
+							index: wengaoDeviceRows.index * 2 + 1
+							headerText: wengaoDeviceRows.displayName + " (B)"
 							model: QuantityObjectModel {
-								QuantityObject { unit: VenusOS.Units_Volt_DC; hidden: true }
+								QuantityObject { object: terminalBVoltageItem; unit: VenusOS.Units_Volt_DC }
 								QuantityObject { object: terminalBCurrentItem; unit: VenusOS.Units_Amp }
-								QuantityObject { unit: VenusOS.Units_Watt; hidden: true }
+								QuantityObject {
+									object: displayDevice
+									key: "terminalBPower"
+									unit: VenusOS.Units_Watt
+									hidden: systemTerminalItem.value !== "B"
+								}
 							}
 						}
 
@@ -124,11 +123,8 @@ Page {
 							id: displayDevice
 							readonly property real power: wengaoDeviceRows.displayOfflineAsZero
 									|| !dcLoadPowerItem.valid ? 0 : dcLoadPowerItem.value
-						}
-
-						DcDevice {
-							id: dcDevice
-							serviceUid: wengaoDeviceRows.serviceUid
+							readonly property real terminalAPower: systemTerminalItem.value === "A" ? power : NaN
+							readonly property real terminalBPower: systemTerminalItem.value === "B" ? power : NaN
 						}
 
 						VeQuickItem {
@@ -137,13 +133,28 @@ Page {
 						}
 
 						VeQuickItem {
+							id: terminalAVoltageItem
+							uid: wengaoDeviceRows.serviceUid + "/Wengao/TerminalA/Voltage"
+						}
+
+						VeQuickItem {
 							id: terminalACurrentItem
 							uid: wengaoDeviceRows.serviceUid + "/Wengao/TerminalA/SignedCurrent"
 						}
 
 						VeQuickItem {
+							id: terminalBVoltageItem
+							uid: wengaoDeviceRows.serviceUid + "/Wengao/TerminalB/Voltage"
+						}
+
+						VeQuickItem {
 							id: terminalBCurrentItem
 							uid: wengaoDeviceRows.serviceUid + "/Wengao/TerminalB/SignedCurrent"
+						}
+
+						VeQuickItem {
+							id: systemTerminalItem
+							uid: wengaoDeviceRows.serviceUid + "/Wengao/SystemTerminal"
 						}
 
 						VeQuickItem {
