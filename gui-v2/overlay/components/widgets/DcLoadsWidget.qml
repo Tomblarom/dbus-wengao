@@ -21,8 +21,8 @@ OverviewWidget {
 	//% "DC Loads"
 	title: qsTrId("overview_widget_dcloads_title")
 	type: VenusOS.OverviewWidget_Type_DcLoads
-	enabled: loadDevices.count > 0 || nonWengaoLoadDevices.count > 0
-	preferredSize: loadDevices.count > 1 ? VenusOS.OverviewWidget_PreferredSize_PreferLarge : VenusOS.OverviewWidget_PreferredSize_Any
+	enabled: loadDevices.rowCount > 0 || nonWengaoLoadDevices.count > 0
+	preferredSize: loadDevices.rowCount > 1 ? VenusOS.OverviewWidget_PreferredSize_PreferLarge : VenusOS.OverviewWidget_PreferredSize_Any
 
 	contentItem: ColumnLayout {
 		spacing: Theme.geometry_overviewPage_widget_content_spacing
