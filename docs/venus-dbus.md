@@ -60,6 +60,10 @@ For an intentionally optional device, `[devices.alarms] communication = false` k
 `/WengaoDisplayOrder` contains the device's position in `config.toml`. It is display metadata,
 not a Victron DeviceInstance. The GUI overlay sorts Wengao DC-load rows by this value.
 
+`/Wengao/SystemTerminal` contains the configured physical system side (`A` or `B`). It is static
+display metadata and lets the GUI associate the normalized DC-load power with exactly one of the
+two terminal rows.
+
 `/Wengao/DcLoadPower` is a non-negative display-only value from the configured system terminal.
 It is `0 W` while power enters the system and reports positive power while the converter draws
 from the system. This lets an alternator-role vehicle-battery link remain a correct Victron source

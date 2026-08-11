@@ -14,7 +14,7 @@ def test_gui_manifest_pins_the_validated_venus_version() -> None:
     manifest = json.loads((GUI_ROOT / "manifest.json").read_text(encoding="utf-8"))
     assert manifest == {
         "schema_version": 1,
-        "patch_id": "overview-breakdowns-v7",
+        "patch_id": "overview-breakdowns-v8",
         "upstream_repository": "https://github.com/victronenergy/gui-v2.git",
         "upstream_tag": "v1.3.14",
         "upstream_commit": "c8f5a14353d1c6dc7554cbc8bf5d167af8fd00d7",
@@ -75,11 +75,17 @@ def test_dc_load_detail_page_uses_ordered_wengao_rows_and_terminal_currents() ->
     assert 'childId: "WengaoDisplayOrder"' in page
     assert "sortColumn: orderedChildren.sortValueColumn" in page
     assert 'serviceTypes: ["alternator", "dcsystem", "dcload", "dcdc", "motordrive"]' in page
-    assert "wengaoDeviceRows.index * 3" in page
-    assert 'headerText: qsTr("Terminal A")' in page
-    assert 'headerText: qsTr("Terminal B")' in page
+    assert page.count("QuantityTable.TableRow {") == 2
+    assert "wengaoDeviceRows.index * 2" in page
+    assert 'headerText: wengaoDeviceRows.displayName + " (A)"' in page
+    assert 'headerText: wengaoDeviceRows.displayName + " (B)"' in page
+    assert '/Wengao/TerminalA/Voltage' in page
+    assert '/Wengao/TerminalB/Voltage' in page
     assert '/Wengao/TerminalA/SignedCurrent' in page
     assert '/Wengao/TerminalB/SignedCurrent' in page
+    assert '/Wengao/SystemTerminal' in page
+    assert 'hidden: systemTerminalItem.value !== "A"' in page
+    assert 'hidden: systemTerminalItem.value !== "B"' in page
     assert "displayOfflineAsZero" in page
     assert "|| !dcLoadPowerItem.valid ? 0" in page
     assert re.search(r"id:\s*nonWengaoDevices", page)
@@ -128,7 +134,7 @@ preloadWasm('venus-gui-v2.wasm', callback);
             sys.executable,
             str(GUI_ROOT / "cache_bust.py"),
             str(index),
-            "overview-breakdowns-v7",
+            "overview-breakdowns-v8",
         ],
         capture_output=True,
         text=True,
@@ -136,8 +142,8 @@ preloadWasm('venus-gui-v2.wasm', callback);
     )
     assert result.returncode == 0, result.stderr
     stamped = index.read_text(encoding="utf-8")
-    assert stamped.count("?v=overview-breakdowns-v7") == 5
-    assert 'name="dbus-wengao-gui-revision" content="overview-breakdowns-v7"' in stamped
+    assert stamped.count("?v=overview-breakdowns-v8") == 5
+    assert 'name="dbus-wengao-gui-revision" content="overview-breakdowns-v8"' in stamped
 
 
 def test_uninstall_restores_an_active_gui_before_removing_the_app() -> None:
