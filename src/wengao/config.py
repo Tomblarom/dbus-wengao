@@ -31,7 +31,8 @@ DEVICE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 STABLE_SERIAL_PREFIX = "/dev/serial/by-id/"
 HARDWARE_VOLTAGE_MIN = 10.0
 HARDWARE_VOLTAGE_MAX = 60.0
-HARDWARE_CURRENT_MAX = {Terminal.A: 100.0, Terminal.B: 25.0}
+HARDWARE_CURRENT_MAX = 100.0
+HARDWARE_POWER_MAX = 1500.0
 
 
 class UnavailableDeviceDisplay(StrEnum):
@@ -456,17 +457,30 @@ def _validate_write_configuration(
                 f"{prefix}_voltage must stay within "
                 f"{HARDWARE_VOLTAGE_MIN:g}..{HARDWARE_VOLTAGE_MAX:g} V"
             )
-        terminal_current_max = HARDWARE_CURRENT_MAX[terminal]
         if current is not None and not (
-            1.0 <= current.minimum <= current.maximum <= terminal_current_max
+            1.0 <= current.minimum <= current.maximum <= HARDWARE_CURRENT_MAX
         ):
             raise ConfigurationError(
-                f"{prefix}_current must stay within 1..{terminal_current_max:g} A"
+                f"{prefix}_current must stay within 1..{HARDWARE_CURRENT_MAX:g} A"
             )
 
     destinations = {
         Terminal.B if direction is Direction.A_TO_B else Terminal.A for direction in directions
     }
+    for terminal in (Terminal.A, Terminal.B):
+        if terminal in destinations:
+            continue
+        prefix = f"devices.{device_id}.write_limits.terminal_{terminal.value.lower()}"
+        if write_limits.voltage(terminal) is not None:
+            raise ConfigurationError(
+                f"{prefix}_voltage is not allowed because terminal {terminal.value} "
+                "is not a destination"
+            )
+        if write_limits.current(terminal) is not None:
+            raise ConfigurationError(
+                f"{prefix}_current is not allowed because terminal {terminal.value} "
+                "is not a destination"
+            )
     for terminal in destinations:
         voltage = write_limits.voltage(terminal)
         current = write_limits.current(terminal)

@@ -334,20 +334,64 @@ def test_external_dbus_control_accepts_narrow_hardware_safe_limits() -> None:
         write_limits={
             "minimum_interval": 5,
             "terminal_b_voltage": [48.0, 58.4],
-            "terminal_b_current": [1.0, 25.0],
+            "terminal_b_current": [1.0, 31.25],
         },
     )
     parsed = parse_config(config_with(device)).devices[0]
     assert parsed.control_mode is ControlMode.EXTERNAL_DBUS
+    assert parsed.write_limits.terminal_a_voltage is None
+    assert parsed.write_limits.terminal_a_current is None
     assert parsed.write_limits.terminal_b_voltage is not None
     assert parsed.write_limits.terminal_b_voltage.maximum == 58.4
+    assert parsed.write_limits.terminal_b_current is not None
+    assert parsed.write_limits.terminal_b_current.maximum == 31.25
+
+
+def test_fixed_direction_rejects_unused_source_terminal_limits() -> None:
+    device = valid_device(
+        profile="fixed-direction-dc-converter",
+        venus_role="dcdc",
+        control_mode="external-dbus",
+        allowed_directions=["A-to-B"],
+        locked_direction="A-to-B",
+        permissions={"set_voltage": True, "set_current": True},
+        write_limits={
+            "terminal_a_voltage": [10.0, 14.6],
+            "terminal_b_voltage": [48.0, 58.4],
+            "terminal_b_current": [1.0, 31.25],
+        },
+    )
+
+    with pytest.raises(ConfigurationError, match="terminal_a_voltage is not allowed"):
+        parse_config(config_with(device))
+
+
+def test_fixed_b_to_a_only_requires_terminal_a_limits() -> None:
+    device = valid_device(
+        profile="fixed-direction-dc-converter",
+        venus_role="dcdc",
+        control_mode="external-dbus",
+        allowed_directions=["B-to-A"],
+        locked_direction="B-to-A",
+        permissions={"set_voltage": True, "set_current": True},
+        write_limits={
+            "terminal_a_voltage": [10.0, 14.6],
+            "terminal_a_current": [1.0, 100.0],
+        },
+    )
+
+    parsed = parse_config(config_with(device)).devices[0]
+    assert parsed.write_limits.terminal_a_voltage is not None
+    assert parsed.write_limits.terminal_a_current is not None
+    assert parsed.write_limits.terminal_b_voltage is None
+    assert parsed.write_limits.terminal_b_current is None
 
 
 @pytest.mark.parametrize(
     ("key", "value", "message"),
     [
         ("terminal_b_voltage", [9.0, 58.4], "10..60 V"),
-        ("terminal_b_current", [1.0, 26.0], "1..25 A"),
+        ("terminal_b_current", [1.0, 100.01], "1..100 A"),
     ],
 )
 def test_external_dbus_limits_cannot_exceed_hardware(
@@ -355,7 +399,7 @@ def test_external_dbus_limits_cannot_exceed_hardware(
 ) -> None:
     limits = {
         "terminal_b_voltage": [48.0, 58.4],
-        "terminal_b_current": [1.0, 25.0],
+        "terminal_b_current": [1.0, 100.0],
     }
     limits[key] = value
     device = valid_device(

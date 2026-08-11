@@ -32,5 +32,7 @@ target hardware; it does not by itself authorise writes.
 | `0800–0819`, `0820–0833` | none | mixed | calibration, protection and other persistent settings | app-source-confirmed | not authorised |
 
 All write permissions default to false. The WG-48BC1500M hard bounds used by configuration
-validation are 10–60 V, 1–100 A for terminal A and 1–25 A for terminal B. Every installation must
-configure an equal or narrower range before exposing a voltage/current path.
+validation are 10–60 V and 1–100 A for either destination terminal. Immediately before every
+voltage/current write, the driver also verifies the complete requested setpoint pair against the
+1500 W hardware rating. Every installation must configure an equal or narrower range before
+exposing a voltage/current path.
