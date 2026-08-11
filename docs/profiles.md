@@ -31,5 +31,7 @@ correct direction automatically.
 
 `monitor-only` is the default and is not a Venus D-Bus class. Every permission must be false.
 `external-dbus` permits only explicitly enabled remote on/off, voltage and current operations.
-Voltage/current permissions additionally require configured per-terminal ranges. Direction, mode,
-protection, calibration and factory permissions remain rejected.
+Voltage/current permissions additionally require ranges only for terminals that can be a
+destination: B for `A-to-B`, A for `B-to-A`, and both for bidirectional operation. The driver checks
+every resulting voltage/current pair against the 1500 W hardware rating immediately before a
+write. Direction, mode, protection, calibration and factory permissions remain rejected.

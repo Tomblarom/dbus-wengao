@@ -23,12 +23,18 @@ factory_reset = false
 [devices.write_limits]
 minimum_interval = 5.0
 terminal_b_voltage = [48.0, 58.4]
-terminal_b_current = [1.0, 25.0]
+terminal_b_current = [1.0, 31.25]
 ```
 
 This example applies to terminal B as an allowed destination. Configure only ranges that are safe
-for the connected battery and installation. A bidirectional profile needs explicit ranges for both
-possible destination terminals when the corresponding permission is enabled.
+for the connected battery and installation. The hardware current range is 1–100 A on either
+terminal, but every requested voltage/current pair is additionally limited to 1500 W. For example,
+31.25 A is permitted at 48 V, while the same current is rejected at 58.4 V.
+
+A fixed `A-to-B` profile only needs terminal B ranges because B is its sole destination. A fixed
+`B-to-A` profile only needs terminal A ranges. Do not configure ranges for the source terminal.
+A bidirectional profile needs explicit ranges for both possible destination terminals when the
+corresponding permission is enabled.
 
 ## Create buttons and setpoint controls
 

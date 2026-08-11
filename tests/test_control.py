@@ -84,7 +84,7 @@ def controlled_config() -> DeviceConfig:
                 "write_limits": {
                     "minimum_interval": 5,
                     "terminal_b_voltage": [48.0, 58.4],
-                    "terminal_b_current": [1.0, 25.0],
+                    "terminal_b_current": [1.0, 100.0],
                 },
             }
         ],
@@ -126,7 +126,44 @@ def test_out_of_range_value_is_rejected_without_write() -> None:
     controller = SafeWriteController(protocol, controlled_config())
     controller.authorize_identity(identity())
     with pytest.raises(UnsafeWriteError, match="outside configured range"):
-        controller.set_current(Terminal.B, 25.01)
+        controller.set_current(Terminal.B, 100.01)
+    assert protocol.writes == []
+
+
+def test_current_write_is_bounded_by_rated_power_at_verified_voltage() -> None:
+    protocol = FakeProtocol()
+    controller = SafeWriteController(protocol, controlled_config())
+    controller.authorize_identity(identity())
+
+    verified = controller.set_current(Terminal.B, 27.77)
+
+    assert protocol.writes == [("B-current", 27.77)]
+    assert verified.terminal_b.current_a == 27.77
+
+
+def test_current_write_above_rated_power_is_rejected_without_write() -> None:
+    protocol = FakeProtocol()
+    controller = SafeWriteController(protocol, controlled_config())
+    controller.authorize_identity(identity())
+
+    with pytest.raises(UnsafeWriteError, match="1500 W"):
+        controller.set_current(Terminal.B, 27.78)
+
+    assert protocol.writes == []
+
+
+def test_voltage_write_above_rated_power_is_rejected_without_write() -> None:
+    protocol = FakeProtocol()
+    protocol.settings = replace(
+        protocol.settings,
+        terminal_b=replace(protocol.settings.terminal_b, current_a=30.0),
+    )
+    controller = SafeWriteController(protocol, controlled_config())
+    controller.authorize_identity(identity())
+
+    with pytest.raises(UnsafeWriteError, match="1650 W"):
+        controller.set_voltage(Terminal.B, 55.0)
+
     assert protocol.writes == []
 
 

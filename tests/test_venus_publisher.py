@@ -397,7 +397,7 @@ def test_external_control_exposes_only_permitted_destination_paths() -> None:
         permissions={"remote_on_off": True, "set_voltage": True, "set_current": True},
         write_limits={
             "terminal_b_voltage": [48.0, 58.4],
-            "terminal_b_current": [1.0, 25.0],
+            "terminal_b_current": [1.0, 31.25],
         },
     )
     service = FakeService()

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Protocol
 
-from wengao.config import DeviceConfig, WriteRange
+from wengao.config import HARDWARE_POWER_MAX, DeviceConfig, WriteRange
 from wengao.errors import UnsafeWriteError
 from wengao.model import ControlSettings, DeviceIdentity, TerminalSetpoints
 from wengao.profiles import Direction, Terminal
@@ -123,15 +123,16 @@ class SafeWriteController:
         )
         if round(existing_value * 100) == raw_value:
             return current
+        if kind == "voltage":
+            requested = replace(terminal_settings, voltage_v=requested_value)
+        else:
+            requested = replace(terminal_settings, current_a=requested_value)
+        self._validate_power_envelope(terminal, requested)
         key = f"terminal-{terminal.value}"
         self._check_rate_limit(key)
         # Record the attempt before touching the persistent setpoint register.  This also
         # throttles retries after an ambiguous timeout.
         self._record_write(key)
-        if kind == "voltage":
-            requested = replace(terminal_settings, voltage_v=requested_value)
-        else:
-            requested = replace(terminal_settings, current_a=requested_value)
 
         # The Android manufacturer app writes ordinary voltage/current edits individually with
         # function 0x06. This avoids rewriting the two other persistent registers.
@@ -156,6 +157,15 @@ class SafeWriteController:
         )
         self._last_verified = verified
         return verified
+
+    @staticmethod
+    def _validate_power_envelope(terminal: Terminal, requested: TerminalSetpoints) -> None:
+        requested_power = requested.voltage_v * requested.current_a
+        if requested_power > HARDWARE_POWER_MAX + 1e-9:
+            raise UnsafeWriteError(
+                f"terminal {terminal.value} setpoints request {requested_power:g} W; "
+                f"hardware limit is {HARDWARE_POWER_MAX:g} W"
+            )
 
     def _require_verified_device(self) -> None:
         if not self._identity_verified:
