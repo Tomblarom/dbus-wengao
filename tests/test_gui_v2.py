@@ -14,7 +14,7 @@ def test_gui_manifest_pins_the_validated_venus_version() -> None:
     manifest = json.loads((GUI_ROOT / "manifest.json").read_text(encoding="utf-8"))
     assert manifest == {
         "schema_version": 1,
-        "patch_id": "overview-breakdowns-v6",
+        "patch_id": "overview-breakdowns-v7",
         "upstream_repository": "https://github.com/victronenergy/gui-v2.git",
         "upstream_tag": "v1.3.14",
         "upstream_commit": "c8f5a14353d1c6dc7554cbc8bf5d167af8fd00d7",
@@ -53,6 +53,9 @@ def test_dc_load_widget_lists_each_device_and_its_power() -> None:
     assert "wengaoModel: loadDevices" not in widget
     assert "nonWengaoModel: nonWengaoLoadDevices" not in widget
     assert 'return marker?.value !== 1' in widget
+    assert "enabled: loadDevices.rowCount > 0" in widget
+    assert "preferredSize: loadDevices.rowCount > 1" in widget
+    assert "loadDevices.count" not in widget
 
 
 def test_gui_overlay_contains_no_installation_specific_identity() -> None:
@@ -68,7 +71,7 @@ def test_dc_load_detail_page_uses_ordered_wengao_rows_and_terminal_currents() ->
     assert "This code is based on Victron Energy code" in page
     assert "required property var wengaoModel" not in page
     assert re.search(r"id:\s*wengaoDevices", page)
-    assert "model: wengaoDevices.count > 0 ? wengaoDevices : null" in page
+    assert "model: wengaoDevices.rowCount > 0 ? wengaoDevices : null" in page
     assert 'childId: "WengaoDisplayOrder"' in page
     assert "sortColumn: orderedChildren.sortValueColumn" in page
     assert 'serviceTypes: ["alternator", "dcsystem", "dcload", "dcdc", "motordrive"]' in page
@@ -82,6 +85,7 @@ def test_dc_load_detail_page_uses_ordered_wengao_rows_and_terminal_currents() ->
     assert re.search(r"id:\s*nonWengaoDevices", page)
     assert "model: nonWengaoDevices" in page
     assert 'return childItems["WengaoShowUnavailable"]?.value !== 1' in page
+    assert "wengaoDevices.count" not in page
 
 
 def test_battery_widget_patch_lists_wengao_secondary_batteries() -> None:
@@ -124,7 +128,7 @@ preloadWasm('venus-gui-v2.wasm', callback);
             sys.executable,
             str(GUI_ROOT / "cache_bust.py"),
             str(index),
-            "overview-breakdowns-v6",
+            "overview-breakdowns-v7",
         ],
         capture_output=True,
         text=True,
@@ -132,8 +136,8 @@ preloadWasm('venus-gui-v2.wasm', callback);
     )
     assert result.returncode == 0, result.stderr
     stamped = index.read_text(encoding="utf-8")
-    assert stamped.count("?v=overview-breakdowns-v6") == 5
-    assert 'name="dbus-wengao-gui-revision" content="overview-breakdowns-v6"' in stamped
+    assert stamped.count("?v=overview-breakdowns-v7") == 5
+    assert 'name="dbus-wengao-gui-revision" content="overview-breakdowns-v7"' in stamped
 
 
 def test_uninstall_restores_an_active_gui_before_removing_the_app() -> None:

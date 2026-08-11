@@ -71,7 +71,7 @@ Page {
 					width: parent.width
 					rightPadding: loadSummary.rightPadding
 					equalWidthColumns: true
-					model: wengaoDevices.count > 0 ? wengaoDevices : null
+					model: wengaoDevices.rowCount > 0 ? wengaoDevices : null
 					delegate: Column {
 						id: wengaoDeviceRows
 
@@ -172,7 +172,7 @@ Page {
 	}
 
 	GradientListView {
-		header: wengaoDevices.count > 0 ? headerComponent : null
+		header: wengaoDevices.rowCount > 0 ? headerComponent : null
 		model: nonWengaoDevices
 		delegate: LoadListDelegate {
 			id: deviceDelegate
@@ -185,7 +185,7 @@ Page {
 			temperature: temperatureItem.value ?? NaN
 			columnWidth: ListView.view.headerItem?.contentItem?.columnWidth ?? Theme.geometry_loadListPage_defaultColumnWidth
 			columnSpacing: ListView.view.headerItem?.contentItem?.columnSpacing ?? Theme.geometry_quantityTable_horizontalSpacing_large
-			unitAmps: wengaoDevices.count === 0 && !isNaN(current)
+			unitAmps: wengaoDevices.rowCount === 0 && !isNaN(current)
 				&& (Global.systemSettings.electricalPowerDisplay === VenusOS.ElectricalPowerDisplay_PreferAmps
 				 || Global.systemSettings.electricalPowerDisplay === VenusOS.ElectricalPowerDisplay_Mixed)
 			statusText: !statusItem.valid ? ""
