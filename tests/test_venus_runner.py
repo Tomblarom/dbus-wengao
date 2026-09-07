@@ -3,12 +3,72 @@ from __future__ import annotations
 import math
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
 from wengao.model import DeviceIdentity, RealtimeSnapshot, TerminalMeasurements
 from wengao.venus.runner import run_service
+
+
+class MemoryLastKnownVoltageStore:
+    instances: ClassVar[list[MemoryLastKnownVoltageStore]] = []
+
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
+        self.voltage_v = 12.4
+        self.observed_at = 1_700_000_000
+        self.recorded: tuple[float, int] | None = None
+        self.flushed = 0
+        self.__class__.instances.append(self)
+
+    def load(self) -> MemoryLastKnownVoltageStore:
+        return self
+
+    def record(self, voltage_v: float, *, observed_at: int) -> MemoryLastKnownVoltageStore:
+        self.voltage_v = voltage_v
+        self.observed_at = observed_at
+        self.recorded = (voltage_v, observed_at)
+        return self
+
+    def flush_if_due(self) -> bool:
+        self.flushed += 1
+        return True
+
+    def flush(self) -> bool:
+        self.flushed += 1
+        return True
+
+
+class MemoryHistoryStore:
+    instances: ClassVar[list[MemoryHistoryStore]] = []
+
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
+        self.operation_time = 0
+        self.recorded = 0
+        self.disconnected = 0
+        self.__class__.instances.append(self)
+
+    def load(self) -> bool:
+        return False
+
+    def record(self, _snapshot: RealtimeSnapshot) -> None:
+        self.recorded += 1
+        self.operation_time += 1
+
+    def mark_disconnected(self) -> None:
+        self.disconnected += 1
+
+    def dbus_values(self) -> dict[str, object]:
+        return {
+            "/History/Cumulative/User/OperationTime": self.operation_time,
+            "/History/Cycle/CyclesAvailable": 0,
+        }
+
+    def flush_if_due(self) -> bool:
+        return False
+
+    def flush(self) -> bool:
+        return True
 
 
 class FakeService:
@@ -83,14 +143,16 @@ def write_config(
     *,
     unavailable_devices: str,
     auxiliary_battery: bool,
+    display_last_known_voltage: bool = False,
 ) -> None:
     auxiliary = (
-        """
+        f"""
 [devices.auxiliary_battery]
 enabled = true
 terminal = "A"
 device_instance = 80
 custom_name = "Auxiliary battery"
+display_last_known_voltage = {str(display_last_known_voltage).lower()}
 """
         if auxiliary_battery
         else ""
@@ -158,6 +220,8 @@ def prepare_runtime(monkeypatch: pytest.MonkeyPatch) -> dict[str, FakeService]:
     monkeypatch.setattr("wengao.venus.runner._lock_instance", lambda _device_id: FakeHandle())
     monkeypatch.setattr("wengao.venus.runner.SerialStarterPortLock", FakePortLock)
     monkeypatch.setattr("wengao.venus.runner.SerialRtuTransport", FakeTransport)
+    MemoryHistoryStore.instances.clear()
+    monkeypatch.setattr("wengao.venus.runner.ConverterHistoryStore", MemoryHistoryStore)
     monkeypatch.setattr("wengao.venus.runner.signal.signal", lambda *_args: None)
     return services
 
@@ -231,6 +295,45 @@ def test_successful_first_poll_publishes_both_services(
     auxiliary = services["com.victronenergy.battery.wengao_test_device_a"]
     assert converter.values["/Connected"] == 1
     assert converter.values["/Dc/0/Power"] == 11
+    assert converter.values["/History/Cumulative/User/OperationTime"] == 1
+    assert MemoryHistoryStore.instances[0].recorded == 1
     assert auxiliary.values["/Connected"] == 1
     assert auxiliary.values["/Dc/0/Voltage"] == 12.6
     assert auxiliary.values["/Dc/0/Power"] == 13
+
+
+def test_runner_restores_and_persists_last_known_auxiliary_voltage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "config.toml"
+    write_config(
+        config_path,
+        unavailable_devices="zero",
+        auxiliary_battery=True,
+        display_last_known_voltage=True,
+    )
+    services = prepare_runtime(monkeypatch)
+    MemoryLastKnownVoltageStore.instances.clear()
+    monkeypatch.setattr(
+        "wengao.venus.runner.LastKnownVoltageStore", MemoryLastKnownVoltageStore
+    )
+
+    class OnlineProtocol:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            return
+
+        def test_connection(self) -> DeviceIdentity:
+            return DeviceIdentity("V101", "V103", "V201", "SYNTHETIC", "WG-BC1500M", 1, 0)
+
+        def read_realtime(self) -> RealtimeSnapshot:
+            return snapshot()
+
+    monkeypatch.setattr("wengao.venus.runner.WengaoProtocol", OnlineProtocol)
+    assert run_service(config_path, "test-device") == 0
+    auxiliary = services["com.victronenergy.battery.wengao_test_device_a"]
+    assert auxiliary.values["/Dc/0/Voltage"] == 12.6
+    assert auxiliary.values["/Wengao/LastKnownVoltage"] == 12.6
+    store = MemoryLastKnownVoltageStore.instances[0]
+    assert store.recorded is not None
+    assert store.recorded[0] == 12.6
+    assert store.flushed >= 1

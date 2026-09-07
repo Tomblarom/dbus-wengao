@@ -10,7 +10,14 @@ import pytest
 from wengao._vendor import tomli as vendored_tomli
 from wengao.config import UnavailableDeviceDisplay, load_config, parse_config
 from wengao.errors import ConfigurationError
-from wengao.profiles import BUILTIN_PROFILES, ControlMode, Direction, DvccPolicy, VenusRole
+from wengao.profiles import (
+    BUILTIN_PROFILES,
+    ControlMode,
+    Direction,
+    DisplayCapability,
+    DvccPolicy,
+    VenusRole,
+)
 
 
 def valid_device(**updates: Any) -> dict[str, Any]:
@@ -51,6 +58,9 @@ def test_disabled_example_configuration_loads() -> None:
     assert device.alarms.communication is True
     assert device.auxiliary_battery is not None
     assert not device.auxiliary_battery.enabled
+    assert not device.auxiliary_battery.display_last_known_voltage
+    assert device.battery_source is not None
+    assert not device.battery_source.enabled
     assert config.display.unavailable_devices is UnavailableDeviceDisplay.HIDE
 
 
@@ -68,6 +78,14 @@ def test_schema_is_valid_json() -> None:
     path = Path(__file__).parents[1] / "config" / "config.schema.json"
     schema = json.loads(path.read_text(encoding="utf-8"))
     assert schema["$schema"].endswith("2020-12/schema")
+    fixed_profile_rule = schema["$defs"]["device"]["allOf"][0]
+    assert fixed_profile_rule["if"]["properties"]["profile"]["const"] == (
+        "fixed-direction-dc-converter"
+    )
+    assert (
+        fixed_profile_rule["then"]["properties"]["battery_source"]["properties"]["enabled"]["const"]
+        is False
+    )
 
 
 def test_profile_toml_files_match_embedded_profiles() -> None:
@@ -79,6 +97,9 @@ def test_profile_toml_files_match_embedded_profiles() -> None:
         embedded = BUILTIN_PROFILES[path.stem]
         assert set(profile["venus_roles"]) == {role.value for role in embedded.allowed_venus_roles}
         assert profile["default_venus_role"] == embedded.default_venus_role.value
+        assert set(profile["display_capabilities"]) == {
+            capability.value for capability in embedded.display_capabilities
+        }
 
 
 @pytest.mark.parametrize("version", [None, 0, 2, "1"])
@@ -109,6 +130,42 @@ def test_display_order_follows_the_devices_array() -> None:
 def test_communication_alarm_can_be_disabled_per_device() -> None:
     parsed = parse_config(config_with(valid_device(alarms={"communication": False})))
     assert parsed.devices[0].alarms.communication is False
+
+
+def test_auxiliary_battery_can_opt_into_last_known_voltage_display() -> None:
+    parsed = parse_config(
+        config_with(
+            valid_device(
+                auxiliary_battery={
+                    "enabled": True,
+                    "terminal": "A",
+                    "device_instance": 80,
+                    "custom_name": "Auxiliary battery",
+                    "display_last_known_voltage": True,
+                }
+            )
+        )
+    )
+    auxiliary = parsed.devices[0].auxiliary_battery
+    assert auxiliary is not None
+    assert auxiliary.display_last_known_voltage
+
+
+def test_auxiliary_last_known_voltage_flag_must_be_boolean() -> None:
+    with pytest.raises(ConfigurationError, match="display_last_known_voltage"):
+        parse_config(
+            config_with(
+                valid_device(
+                    auxiliary_battery={
+                        "enabled": True,
+                        "terminal": "A",
+                        "device_instance": 80,
+                        "custom_name": "Auxiliary battery",
+                        "display_last_known_voltage": "true",
+                    }
+                )
+            )
+        )
 
 
 def test_communication_alarm_must_be_boolean() -> None:
@@ -205,6 +262,78 @@ def test_rejects_duplicate_auxiliary_battery_instances() -> None:
     )
     with pytest.raises(ConfigurationError, match="class battery"):
         parse_config(config_with(first, second))
+
+
+def test_battery_source_uses_direction_that_charges_system_terminal() -> None:
+    parsed = parse_config(
+        config_with(
+            valid_device(
+                system_terminal="A",
+                battery_source={"enabled": True, "custom_name": "Auxiliary battery source"},
+            )
+        )
+    )
+    assert parsed.devices[0].battery_source is not None
+    assert parsed.devices[0].battery_source.enabled
+    assert parsed.devices[0].battery_source.custom_name == "Auxiliary battery source"
+
+
+def test_rejects_battery_source_without_system_charging_direction() -> None:
+    with pytest.raises(ConfigurationError, match="B-to-A direction"):
+        parse_config(
+            config_with(
+                valid_device(
+                    system_terminal="A",
+                    allowed_directions=["A-to-B"],
+                    battery_source={"enabled": True, "custom_name": "Auxiliary battery source"},
+                )
+            )
+        )
+
+
+def test_rejects_battery_source_for_non_dc_system_role() -> None:
+    with pytest.raises(ConfigurationError, match="requires venus_role"):
+        parse_config(
+            config_with(
+                valid_device(
+                    profile="vehicle-battery-link",
+                    venus_role="alternator",
+                    battery_source={"enabled": True, "custom_name": "Auxiliary battery source"},
+                )
+            )
+        )
+
+
+def test_rejects_battery_source_when_profile_does_not_offer_capability() -> None:
+    with pytest.raises(ConfigurationError, match="not supported by profile"):
+        parse_config(
+            config_with(
+                valid_device(
+                    profile="fixed-direction-dc-converter",
+                    venus_role="dcsystem",
+                    allowed_directions=["A-to-B"],
+                    locked_direction="A-to-B",
+                    system_terminal="B",
+                    battery_source={"enabled": True, "custom_name": "Battery source"},
+                )
+            )
+        )
+
+
+def test_display_behavior_is_declared_by_profiles() -> None:
+    for profile in BUILTIN_PROFILES.values():
+        assert profile.supports_display(DisplayCapability.DC_LOAD_BREAKDOWN)
+        assert profile.supports_display(DisplayCapability.TERMINAL_ROWS)
+
+    assert BUILTIN_PROFILES["vehicle-battery-link"].supports_display(
+        DisplayCapability.DIRECTIONAL_BATTERY_SOURCE
+    )
+    assert BUILTIN_PROFILES["bidirectional-battery-link"].supports_display(
+        DisplayCapability.DIRECTIONAL_BATTERY_SOURCE
+    )
+    assert not BUILTIN_PROFILES["fixed-direction-dc-converter"].supports_display(
+        DisplayCapability.DIRECTIONAL_BATTERY_SOURCE
+    )
 
 
 def test_allows_same_device_instance_in_different_classes() -> None:
