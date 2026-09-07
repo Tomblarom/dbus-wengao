@@ -1,105 +1,32 @@
-# Optional GUIv2 overview additions
+# Public GUIv2 integration
 
-Victron GUIv2 intentionally aggregates all `dcsystem`, `dcload` and `dcdc` services into one
-**DC Loads** overview widget. Its native detail page already lists the individual services. The
-optional dbus-wengao overlay keeps the aggregate widget but adds a compact live row containing
-the device name and DC-load power for every configured Wengao service, including an alternator-role
-vehicle-battery link. The latter remains in Victron's native alternator/source presentation and is
-additionally listed here: charging the system battery is shown as `0 W`, while power leaving the
-system battery for the other terminal is shown as a positive DC load.
+The driver publishes standard Victron values plus display metadata for generally usable Wengao
+views. The GUI source is maintained in the public
+[`Tomblarom/gui-v2`](https://github.com/Tomblarom/gui-v2) fork so that it can be reviewed against
+the complete upstream GUI. It is not an installation-specific patch and contains no local device
+configuration.
 
-Wengao rows are ordered by the position of their `[[devices]]` table in `config.toml`. The driver
-publishes that position through `/WengaoDisplayOrder`, and the overlay uses Victron's existing
-`VeQItemChildModel` and `VeQItemSortTableModel` pattern. Reordering the local device tables changes
-the row order after the services restart. The same order is used in the **Total** table reached by
-opening the DC Loads widget. The detail page owns its live models instead of borrowing models from
-the overview page, so navigating away from the overview cannot empty or reorder the table.
-`device_instance` remains independent.
+The public integration adds:
 
-The Total table includes every configured Wengao role, including `alternator`, so a vehicle-battery
-link remains present when unavailable under the `"zero"` policy. Every device occupies exactly two
-rows, named `<device> (A)` and `<device> (B)`, with the physical terminal voltage and signed current.
-Their battery-oriented sign convention is charging positive and discharging negative. The
-normalized DC-load power is shown only on the configured system-terminal row, so it is never
-duplicated. Unknown offline measurements remain invalid; only the configured offline DC-load power
-is rendered as `0 W`.
+- compact non-system Wengao battery voltage rows in the standard battery widget;
+- optional last-known auxiliary voltage and observation time in the standard battery page;
+- ordered per-device DC-load rows and two terminal rows in the Total table;
+- an opt-in, direction-dependent battery source card.
+- Orion-compatible overall and cycle history for every Wengao profile, including directional
+  energy totals.
 
-The overview layout follows the pinned Victron `AcWidgetContent` and `ThreePhaseDisplay` patterns:
-the normal large primary-colour total remains in its original position, while device names and
-right-aligned watt values use Victron's tertiary font and primary/secondary value colours in the
-same row style as AC phase summaries. The detail page uses the same offline display policy.
+All three converter presentations are selected through capabilities published by the configured
+device profile. GUIv2 does not infer them from local device names, DeviceInstances or a particular
+installation. Instance configuration only supplies the `config.toml` order, offline policy and
+optional source title/enable state.
 
-With `[display] unavailable_devices = "zero"`, configured Wengao services remain present with
-`/Connected = 0` and are rendered as `0 W`. With `"hide"`, disconnected Wengao rows are filtered
-out. Other Victron DC devices retain their native behaviour.
+The exact D-Bus contract, anonymous mock configuration and build instructions live in the fork's
+`DBUS_WENGAO_INTEGRATION.md`. Reordering `[[devices]]` entries changes `/WengaoDisplayOrder`;
+restarting the generated services then updates the order in both DC-load views. The driver's
+standard D-Bus behavior does not depend on the GUI fork.
 
-The driver publishes the normalized display value separately as `/Wengao/DcLoadPower`. This does
-not change standard role measurements, Venus system calculations, permissions or Modbus
-communication.
+GUI changes use Victron Energy source and therefore remain under the fork's Victron Energy OS
+license v1. No GUIv2 source or compiled WebAssembly artifact belongs in this AGPL driver package.
 
-Victron's standard overview battery widget shows only the selected system battery even when
-`com.victronenergy.system/Batteries` contains additional monitors. The overlay keeps that widget
-and adds a compact row for each non-system Wengao auxiliary battery. It uses the configured battery
-name and Victron's standard small battery font and voltage quantity. An unavailable monitor remains
-visible as `-- V`; it is not promoted to system battery and no voltage is fabricated or retained.
-Clicking the widget continues to open Victron's native battery list.
-
-## Compatibility boundary
-
-`gui-v2/manifest.json` pins all of the following as one tested unit:
-
-- Victron `gui-v2` tag and immutable commit;
-- Venus OS `gui-v2-webassembly` package version;
-- the dbus-wengao overlay revision.
-
-The installer refuses any other Venus package version. After a Venus OS update, do not reapply an
-old build: validate the new upstream widget, update the manifest and rebuild first.
-
-The overlay is based on public Victron GUIv2 code and is governed by the separate
-`gui-v2/LICENSE.txt`. In particular, it is intended only for systems whose core consists of
-Victron Energy components. No prebuilt WebAssembly binary is committed to Git.
-
-## Reproducible build
-
-On Ubuntu 22.04 or later, first install the exact requirements documented by the pinned Victron
-GUIv2 source. Then run:
-
-```sh
-gui-v2/build-wasm.sh
-```
-
-The script clones only the pinned tag, verifies its full commit hash, applies the small overlay
-and writes these ignored build artifacts:
-
-```text
-dist/gui-v2/wasm/
-dist/gui-v2/venus-webassembly.zip
-dist/gui-v2/venus-webassembly.zip.sha256
-```
-
-## Installation and rollback
-
-Copy the verified artifact to Venus OS and run:
-
-```sh
-/data/apps/dbus-wengao/gui-v2/install.sh /path/to/venus-webassembly.zip
-```
-
-Before replacement, the installer verifies the package version, embedded manifest and uncompressed
-WASM checksum. It stores the original web GUI under
-`/data/setupOptions/WengaoDcdc/gui-v2/backups/`, then atomically replaces the web files and restarts
-`vrmlogger`. The build stamps JavaScript, WebAssembly and its metadata requests with the overlay
-revision, preventing a reloaded browser from reusing files from an older overlay. A Remote Console
-tab that was already open during installation still has the old WebAssembly in memory and must be
-reloaded once; server-side replacement cannot modify code already running in a browser tab.
-
-Rollback is explicit:
-
-```sh
-/data/apps/dbus-wengao/gui-v2/restore.sh
-```
-
-The driver itself continues operating if GUIv2 is restored, unavailable or updated. The optional
-overlay is not automatically installed or reapplied during boot or driver updates. A normal
-dbus-wengao uninstall restores the recorded original GUI first if this overlay is still active;
-it refuses to remove the restore tool when that recovery cannot be completed safely.
+Installation and rollback of a GUI build must be handled as a separate operator action.
+Removing or updating `dbus-wengao` does not modify the installed GUI.
