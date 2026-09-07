@@ -32,7 +32,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: shellcheck enable.sh disable.sh restart.sh uninstall.sh install.sh setup service/run service/log/run gui-v2/build-wasm.sh gui-v2/install.sh gui-v2/restore.sh
+      - run: >-
+          shellcheck enable.sh disable.sh restart.sh uninstall.sh install.sh setup
+          service/run service/log/run
+          contrib/venus-time-sync/enable.sh contrib/venus-time-sync/disable.sh
+          contrib/venus-time-sync/service/run contrib/venus-time-sync/service/log/run
       - name: Reject private and generated files
         run: |
           test -z "$(git ls-files | grep -E '(^|/)(reference-private|config\.toml|captures)(/|$)' || true)"

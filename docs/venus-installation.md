@@ -10,12 +10,18 @@ a small MIT-licensed Tomli fallback and does not require SetupHelper.
 ```text
 /data/apps/dbus-wengao/                    application and generated services
 /data/setupOptions/WengaoDcdc/config.toml  private local configuration
+/data/setupOptions/WengaoDcdc/state/        optional last-known display state
 /var/log/dbus-wengao.<device-id>/           rotating volatile service log
 /service/dbus-wengao.<device-id>            daemontools link per enabled device
 ```
 
 The application never creates `config.toml`. On first enable it copies only the disabled public
 example to `/data/setupOptions/WengaoDcdc/config.example.toml`.
+
+When an auxiliary battery explicitly enables `display_last_known_voltage`, the driver stores only
+its last valid voltage and Unix timestamp in `state/`. Writes are checkpointed at most once every
+five minutes and on disconnect or clean shutdown. This state is presentation history, not live
+measurement data and never participates in control or system calculations.
 
 ## Pull-based release installation
 
@@ -40,9 +46,22 @@ system terminals, directions and DeviceInstances. Then run:
 /data/apps/dbus-wengao/enable.sh
 ```
 
-The order of `[[devices]]` tables is also the order used for Wengao rows in the optional overview
-overlay. Changing it requires regenerating/restarting the services. Keep `device_instance` stable;
+The order of `[[devices]]` tables is also the order used for Wengao rows in the optional companion
+GUI. Changing it requires regenerating/restarting the services. Keep `device_instance` stable;
 it identifies the Venus service and is not the display-order control.
+
+For a bidirectional `dcsystem` device whose non-system terminal is a battery, the optional source
+card is enabled per device. The name is installation-specific and the direction that charges the
+system terminal must be present in `allowed_directions`:
+
+```toml
+[devices.battery_source]
+enabled = true
+custom_name = "Auxiliary battery source"
+```
+
+The driver does not switch direction. It only reflects the measured direction in the optional
+GUIv2 overview.
 
 Leave `control_mode = "monitor-only"` unless external control is deliberately required. See
 `node-red.md` for the additional permission and range configuration.
