@@ -3,7 +3,14 @@ from conftest import holding_response
 
 from wengao.errors import CrcMismatchError, ModbusExceptionResponseError, UnexpectedResponseError
 from wengao.protocol.crc import append_crc
-from wengao.protocol.frame import ReadHoldingRequest, parse_read_holding_response
+from wengao.protocol.frame import (
+    ReadHoldingRequest,
+    WriteMultipleRegistersRequest,
+    WriteSingleRegisterRequest,
+    parse_read_holding_response,
+    parse_write_multiple_response,
+    parse_write_single_response,
+)
 
 
 def test_build_read_holding_request() -> None:
@@ -71,4 +78,38 @@ def test_parse_rejects_unexpected_byte_count() -> None:
     with pytest.raises(UnexpectedResponseError, match="byte count"):
         parse_read_holding_response(
             holding_response((1, 2)), expected_address=1, expected_register_count=1
+        )
+
+
+def test_build_and_parse_write_single_register() -> None:
+    request = WriteSingleRegisterRequest(1, 0x0401, 0).to_frame()
+    assert request == append_crc(bytes.fromhex("010604010000"))
+    parse_write_single_response(
+        request,
+        expected_address=1,
+        expected_register=0x0401,
+        expected_value=0,
+    )
+
+
+def test_build_and_parse_write_multiple_registers() -> None:
+    request = WriteMultipleRegistersRequest(1, 0x081D, (5840, 2500, 1500)).to_frame()
+    assert request == append_crc(bytes.fromhex("0110081D00030616D009C405DC"))
+    response = append_crc(bytes.fromhex("0110081D0003"))
+    parse_write_multiple_response(
+        response,
+        expected_address=1,
+        expected_start_register=0x081D,
+        expected_count=3,
+    )
+
+
+def test_write_response_rejects_wrong_echo() -> None:
+    response = append_crc(bytes.fromhex("010604010001"))
+    with pytest.raises(UnexpectedResponseError, match="does not echo"):
+        parse_write_single_response(
+            response,
+            expected_address=1,
+            expected_register=0x0401,
+            expected_value=0,
         )

@@ -1,6 +1,6 @@
 # Venus OS installation
 
-The package layout and read-only service were validated against Venus OS Large `v3.80~39` on a
+The package layout and default read-only service were validated against Venus OS Large `v3.80~39` on a
 Raspberry Pi 4. Python 3.12, pyserial 3.5, D-Bus, GLib and a current `VeDbusService` were present;
 the standard-library `tomllib` module and SetupHelper were not. The release therefore includes
 a small MIT-licensed Tomli fallback and does not require SetupHelper.
@@ -38,6 +38,21 @@ system terminals, directions and DeviceInstances. Then run:
 
 ```sh
 /data/apps/dbus-wengao/enable.sh
+```
+
+The order of `[[devices]]` tables is also the order used for Wengao rows in the optional overview
+overlay. Changing it requires regenerating/restarting the services. Keep `device_instance` stable;
+it identifies the Venus service and is not the display-order control.
+
+Leave `control_mode = "monitor-only"` unless external control is deliberately required. See
+`node-red.md` for the additional permission and range configuration.
+
+Communication loss is an alarm by default. For a converter that is intentionally absent at times,
+use the following per-device override instead of disabling the service or falsifying `/Connected`:
+
+```toml
+[devices.alarms]
+communication = false
 ```
 
 Before enabling an auxiliary battery monitor, select the real house/system battery explicitly in

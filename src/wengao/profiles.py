@@ -24,6 +24,7 @@ class VenusRole(StrEnum):
 
 class ControlMode(StrEnum):
     MONITOR_ONLY = "monitor-only"
+    EXTERNAL_DBUS = "external-dbus"
 
 
 class DvccPolicy(StrEnum):
@@ -46,7 +47,7 @@ BUILTIN_PROFILES: dict[str, Profile] = {
         default_directions=(Direction.A_TO_B, Direction.B_TO_A),
         direction_must_be_locked=False,
         allowed_venus_roles=frozenset({VenusRole.ALTERNATOR, VenusRole.DC_SYSTEM}),
-        default_venus_role=VenusRole.DC_SYSTEM,
+        default_venus_role=VenusRole.ALTERNATOR,
         direction_controls=frozenset({"external-hardware", "software", "device-automatic"}),
     ),
     "bidirectional-battery-link": Profile(

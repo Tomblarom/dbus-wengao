@@ -3,17 +3,19 @@
 `dbus-wengao` is an independent Venus OS driver for Wengao WG-48BC1500M
 bidirectional DC/DC converters.
 
-The project is in its read-only development phase. It can inspect device identity and
-measurements over Modbus RTU and publish them through role-specific Venus OS D-Bus services,
-but deliberately provides no register-write operation and no DVCC control.
+The driver inspects device identity and measurements over Modbus RTU and publishes them through
+role-specific Venus OS D-Bus services. It is read-only by default. Explicit per-device opt-in can
+expose the confirmed remote on/off, voltage and current controls to D-Bus clients such as Node-RED.
+DVCC remains disabled.
 
 ## Safety status
 
 - No device writes are performed during startup or polling.
 - Factory reset, calibration, direction changes and protection-limit writes are absent.
+- Normal controls require `control_mode = "external-dbus"`, a separate permission and, for
+  setpoints, an installation-specific range. Every write is rate-limited and read back.
 - WG-BC900M-family documentation is treated as evidence, not as proof for every register.
-- Runtime setpoints and DVCC remain blocked until persistence, write endurance and fail-safe
-  behaviour have been verified.
+- Dynamic or cyclic setpoint control and DVCC remain blocked because these settings are persistent.
 
 See `docs/safety.md` and `docs/register-map.md` before connecting hardware.
 
@@ -21,10 +23,23 @@ The current Venus roles are `com.victronenergy.alternator`, `com.victronenergy.d
 `com.victronenergy.dcsystem`. Monitor-only is a control policy, not a separate D-Bus class.
 See `docs/venus-dbus.md` for the role and sign mapping.
 
+`vehicle-battery-link` defaults to `alternator`: A-to-B charging is published as positive
+alternator power, while a reverse B-to-A transfer remains the same stable service with negative
+power. The optional GUI additionally lists it under DC Loads: A-to-B is `0 W`, while B-to-A is
+shown as positive consumption from the system battery.
+
 A device may optionally publish its non-system terminal as a separate read-only
 `com.victronenergy.battery` monitor. This auxiliary service contains measurements only: it has no
 SOC, BMS limits, DVCC paths or control authority. The primary Venus battery monitor must be
 selected explicitly before enabling this feature.
+
+With `[display] unavailable_devices = "zero"`, that auxiliary battery remains present in Victron's
+native battery list while the converter is offline. It stays marked disconnected and shows an
+unavailable voltage instead of a fabricated or stale measurement.
+
+The optional version-pinned GUIv2 overlay also adds non-system Wengao auxiliary batteries as
+compact voltage rows to Victron's existing overview battery widget. This does not change the
+selected system battery or create a second energy-system battery.
 
 ## Development
 
@@ -46,7 +61,13 @@ non-anonymised captures.
 
 The optional `[display] unavailable_devices` setting is `"hide"` by default. `"zero"` keeps every
 configured converter visible while disconnected; the GUI displays `0 W`, while the underlying
-measurement remains invalid and `/Connected` remains `0`.
+converter measurement remains invalid and `/Connected` remains `0`.
+
+The optional GUI orders Wengao load rows by their zero-based position in the `[[devices]]` array.
+Reorder those tables in the local `config.toml` to control the display; `device_instance` remains
+an independent Venus identity and is not repurposed for sorting.
+
+See [docs/node-red.md](docs/node-red.md) for opt-in on/off and bounded setpoint controls.
 
 ## Venus OS installation model
 

@@ -170,3 +170,4 @@ if [[ -d /service/vrmlogger ]]; then
 fi
 echo "Installed dbus-wengao GUIv2 load breakdown for $EXPECTED_VERSION"
 echo "Original GUIv2 backup: $BACKUP_ROOT"
+echo "Reload every already-open Remote Console tab; running WebAssembly cannot be replaced in place."

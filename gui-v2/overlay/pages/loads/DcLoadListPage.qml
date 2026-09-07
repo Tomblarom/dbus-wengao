@@ -3,7 +3,8 @@
 ** See LICENSE.txt for license information.
 **
 ** This code is based on Victron Energy code.
-** Modified by the dbus-wengao contributors to display configured offline loads as zero.
+** Modified by the dbus-wengao contributors to show ordered Wengao terminal currents and
+** configured offline devices without changing Victron's system total.
 */
 
 import QtQuick
@@ -12,8 +13,9 @@ import Victron.VenusOS
 Page {
 	id: root
 
-	required property FilteredDeviceModel systemModel
-	required property FilteredDeviceModel nonSystemModel
+	function includeNonWengaoDevice(_device, childItems) {
+		return childItems["WengaoShowUnavailable"]?.value !== 1
+	}
 
 	function _showSettingsPage(device) {
 		if (BackendConnection.serviceTypeFromUid(device.serviceUid) === "dcdc") {
@@ -40,7 +42,7 @@ Page {
 				readonly property real columnWidth: loadSummary.fixedColumnWidth
 				readonly property real columnSpacing: loadSummary.columnSpacing
 
-				implicitHeight: dcsystemTable.y + dcsystemTable.height
+				implicitHeight: wengaoTable.y + wengaoTable.height
 				contentWidth: Math.max(Theme.geometry_quantityTable_maximumWidth_small, tableListItem.availableWidth)
 
 				QuantityTableSummary {
@@ -63,50 +65,116 @@ Page {
 				}
 
 				QuantityTable {
-					id: dcsystemTable
+					id: wengaoTable
 
 					anchors.top: loadSummary.bottom
 					width: parent.width
 					rightPadding: loadSummary.rightPadding
 					equalWidthColumns: true
-					model: root.systemModel.count > 1 ? root.systemModel : null
-					delegate: QuantityTable.TableRow {
-						id: dcsystemTableRow
+					model: wengaoDevices.rowCount > 0 ? wengaoDevices : null
+					delegate: Column {
+						id: wengaoDeviceRows
 
-						required property Device device
+						required property int index
+						required property VeQItem item
+						readonly property string serviceUid: item.itemParent().uid
+						readonly property string displayName: customNameItem.value
+								|| productNameItem.value || serviceUid
 						readonly property bool displayOfflineAsZero: showUnavailableItem.valid
 								&& showUnavailableItem.value === 1
 								&& connectedItem.value !== 1
 
-						headerText: dcSystemDevice.name
-						model: QuantityObjectModel {
-							QuantityObject { object: displayDevice; key: "voltage"; unit: VenusOS.Units_Volt_DC }
-							QuantityObject { object: displayDevice; key: "current"; unit: VenusOS.Units_Amp }
-							QuantityObject { object: displayDevice; key: "power"; unit: VenusOS.Units_Watt }
+						width: wengaoTable.width
+						height: childrenRect.height
+
+						QuantityTable.TableRow {
+							table: wengaoTable
+							index: wengaoDeviceRows.index * 2
+							headerText: wengaoDeviceRows.displayName + " (A)"
+							model: QuantityObjectModel {
+								QuantityObject { object: terminalAVoltageItem; unit: VenusOS.Units_Volt_DC }
+								QuantityObject { object: terminalACurrentItem; unit: VenusOS.Units_Amp }
+								QuantityObject {
+									object: displayDevice
+									key: "terminalAPower"
+									unit: VenusOS.Units_Watt
+									hidden: systemTerminalItem.value !== "A"
+								}
+							}
+						}
+
+						QuantityTable.TableRow {
+							table: wengaoTable
+							index: wengaoDeviceRows.index * 2 + 1
+							headerText: wengaoDeviceRows.displayName + " (B)"
+							model: QuantityObjectModel {
+								QuantityObject { object: terminalBVoltageItem; unit: VenusOS.Units_Volt_DC }
+								QuantityObject { object: terminalBCurrentItem; unit: VenusOS.Units_Amp }
+								QuantityObject {
+									object: displayDevice
+									key: "terminalBPower"
+									unit: VenusOS.Units_Watt
+									hidden: systemTerminalItem.value !== "B"
+								}
+							}
 						}
 
 						QtObject {
 							id: displayDevice
-							readonly property real voltage: dcSystemDevice.voltage
-							readonly property real current: dcSystemDevice.current
-							readonly property real power: dcsystemTableRow.displayOfflineAsZero
-									? 0
-									: dcSystemDevice.power
+							readonly property real power: wengaoDeviceRows.displayOfflineAsZero
+									|| !dcLoadPowerItem.valid ? 0 : dcLoadPowerItem.value
+							readonly property real terminalAPower: systemTerminalItem.value === "A" ? power : NaN
+							readonly property real terminalBPower: systemTerminalItem.value === "B" ? power : NaN
 						}
 
-						DcDevice {
-							id: dcSystemDevice
-							serviceUid: dcsystemTableRow.device.serviceUid
+						VeQuickItem {
+							id: dcLoadPowerItem
+							uid: wengaoDeviceRows.serviceUid + "/Wengao/DcLoadPower"
+						}
+
+						VeQuickItem {
+							id: terminalAVoltageItem
+							uid: wengaoDeviceRows.serviceUid + "/Wengao/TerminalA/Voltage"
+						}
+
+						VeQuickItem {
+							id: terminalACurrentItem
+							uid: wengaoDeviceRows.serviceUid + "/Wengao/TerminalA/SignedCurrent"
+						}
+
+						VeQuickItem {
+							id: terminalBVoltageItem
+							uid: wengaoDeviceRows.serviceUid + "/Wengao/TerminalB/Voltage"
+						}
+
+						VeQuickItem {
+							id: terminalBCurrentItem
+							uid: wengaoDeviceRows.serviceUid + "/Wengao/TerminalB/SignedCurrent"
+						}
+
+						VeQuickItem {
+							id: systemTerminalItem
+							uid: wengaoDeviceRows.serviceUid + "/Wengao/SystemTerminal"
+						}
+
+						VeQuickItem {
+							id: customNameItem
+							uid: wengaoDeviceRows.serviceUid + "/CustomName"
+						}
+
+						VeQuickItem {
+							id: productNameItem
+							uid: wengaoDeviceRows.serviceUid + "/ProductName"
 						}
 
 						VeQuickItem {
 							id: connectedItem
-							uid: dcsystemTableRow.device.serviceUid + "/Connected"
+							uid: wengaoDeviceRows.serviceUid + "/Connected"
 						}
 
 						VeQuickItem {
 							id: showUnavailableItem
-							uid: dcsystemTableRow.device.serviceUid + "/WengaoShowUnavailable"
+							uid: wengaoDeviceRows.serviceUid + "/WengaoShowUnavailable"
 						}
 					}
 				}
@@ -115,23 +183,20 @@ Page {
 	}
 
 	GradientListView {
-		header: root.systemModel.count > 1 ? headerComponent: null
-		model: root.nonSystemModel
+		header: wengaoDevices.rowCount > 0 ? headerComponent : null
+		model: nonWengaoDevices
 		delegate: LoadListDelegate {
 			id: deviceDelegate
 
 			required property var device
-			readonly property bool displayOfflineAsZero: showUnavailableItem.valid
-					&& showUnavailableItem.value === 1
-					&& connectedItem.value !== 1
 
 			name: device.name
-			power: displayOfflineAsZero ? 0 : (dcDevice.power ?? NaN)
+			power: dcDevice.power ?? NaN
 			current: dcDevice.current ?? NaN
 			temperature: temperatureItem.value ?? NaN
 			columnWidth: ListView.view.headerItem?.contentItem?.columnWidth ?? Theme.geometry_loadListPage_defaultColumnWidth
 			columnSpacing: ListView.view.headerItem?.contentItem?.columnSpacing ?? Theme.geometry_quantityTable_horizontalSpacing_large
-			unitAmps: root.systemModel.count <= 1 && !isNaN(current)
+			unitAmps: wengaoDevices.rowCount === 0 && !isNaN(current)
 				&& (Global.systemSettings.electricalPowerDisplay === VenusOS.ElectricalPowerDisplay_PreferAmps
 				 || Global.systemSettings.electricalPowerDisplay === VenusOS.ElectricalPowerDisplay_Mixed)
 			statusText: !statusItem.valid ? ""
@@ -150,20 +215,47 @@ Page {
 				uid: device.serviceType === "dcdc" ? device.serviceUid + "/State" : ""
 			}
 
-			VeQuickItem {
-				id: connectedItem
-				uid: device.serviceUid + "/Connected"
-			}
-
-			VeQuickItem {
-				id: showUnavailableItem
-				uid: device.serviceUid + "/WengaoShowUnavailable"
-			}
-
 			DcDevice {
 				id: dcDevice
 				serviceUid: deviceDelegate.device.serviceUid
 			}
 		}
+	}
+
+	// These models must belong to the detail page. Models owned by the overview widget are
+	// disabled when that page leaves the stack, which previously made this table empty.
+	VeQItemSortTableModel {
+		id: wengaoDevices
+		dynamicSortFilter: true
+		filterRole: VeQItemTableModel.ValueRole
+		filterFlags: VeQItemSortTableModel.FilterInvalid
+		sortColumn: orderedChildren.sortValueColumn
+
+		model: VeQItemChildModel {
+			id: orderedChildren
+			childId: "WengaoDisplayOrder"
+			model: VeQItemFilteredServiceModel {
+				serviceTypes: ["alternator", "dcsystem", "dcload", "dcdc", "motordrive"]
+			}
+			sortDelegate: VeQItemSortDelegate {
+				VeQuickItem {
+					id: displayOrderItem
+					uid: buddy.uid + "/WengaoDisplayOrder"
+				}
+				sortValue: displayOrderItem.valid ? displayOrderItem.value : 2147483647
+			}
+		}
+	}
+
+	FilteredDeviceModel {
+		id: nonWengaoDevices
+		serviceTypes: ["dcsystem", "dcload", "dcdc", "motordrive"]
+		childFilterIds: {
+			"dcsystem": ["WengaoShowUnavailable"],
+			"dcload": ["WengaoShowUnavailable"],
+			"dcdc": ["WengaoShowUnavailable"],
+			"motordrive": ["WengaoShowUnavailable"]
+		}
+		childFilterFunction: root.includeNonWengaoDevice
 	}
 }

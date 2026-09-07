@@ -11,6 +11,7 @@ from wengao.errors import ConfigurationError
 from wengao.servicegen import (
     _quiesce_serial_starter,
     _start,
+    _stop_service_tree,
     disable_services,
     generate_services,
 )
@@ -120,6 +121,27 @@ def test_start_wakes_log_and_main_supervisors(
     assert calls == [
         ["/usr/bin/svc", "-u", str(service / "log")],
         ["/usr/bin/svc", "-u", str(service)],
+    ]
+
+
+def test_stop_exits_main_and_log_supervisors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(arguments: list[str], **_kwargs: Any) -> None:
+        calls.append(arguments)
+
+    def fake_which(name: str) -> str | None:
+        return "/usr/bin/svc" if name == "svc" else None
+
+    monkeypatch.setattr("wengao.servicegen.shutil.which", fake_which)
+    monkeypatch.setattr("wengao.servicegen.subprocess.run", fake_run)
+    service = tmp_path / "dbus-wengao.test"
+    _stop_service_tree(service)
+    assert calls == [
+        ["/usr/bin/svc", "-dx", str(service)],
+        ["/usr/bin/svc", "-dx", str(service / "log")],
     ]
 
 

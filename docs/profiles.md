@@ -5,8 +5,10 @@ Profiles describe general converter behaviour; they do not represent a private i
 ## `vehicle-battery-link`
 
 Allows A-to-B and B-to-A operation. Its compatible Venus roles are `alternator` and `dcsystem`.
-DVCC remains disabled until volatile setpoints, write endurance and fail-safe behaviour are
-proven.
+Its default is `alternator`. The service class remains stable in both directions: power is positive
+when the configured system terminal is charged and negative when the Wengao draws from it. This
+lets Venus represent A-to-B vehicle charging as an alternator source without misclassifying the
+same device as a classic DC load. DVCC remains disabled.
 
 The opposite terminal may optionally be exposed as an auxiliary battery monitor. This is useful
 for a vehicle or starter battery that must remain separate from the configured system terminal.
@@ -25,8 +27,11 @@ the fixed converter is a source or load viewed from the configured system termin
 direction conflict invalidates standard current and power paths; the driver never attempts to
 correct direction automatically.
 
-## Monitor-only
+## Control policy
 
-`monitor-only` is the current control mode for every profile. It is not a Venus D-Bus class.
-Every device permission must remain false and configuration validation rejects any enabled
-write permission.
+`monitor-only` is the default and is not a Venus D-Bus class. Every permission must be false.
+`external-dbus` permits only explicitly enabled remote on/off, voltage and current operations.
+Voltage/current permissions additionally require ranges only for terminals that can be a
+destination: B for `A-to-B`, A for `B-to-A`, and both for bidirectional operation. The driver checks
+every resulting voltage/current pair against the 1500 W hardware rating immediately before a
+write. Direction, mode, protection, calibration and factory permissions remain rejected.
