@@ -27,6 +27,7 @@ from wengao.profiles import (
 CONFIG_VERSION = 1
 MAX_DEVICE_INSTANCE = 32767
 DEVICE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+STABLE_SERIAL_PREFIX = "/dev/serial/by-id/"
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,8 +163,10 @@ def _parse_device(raw: dict[str, Any], *, require_ports_exist: bool) -> DeviceCo
         ) from error
     enabled = _boolean(raw.get("enabled", False), f"devices.{device_id}.enabled")
     port = _string(raw.get("port"), f"devices.{device_id}.port")
-    if not (port.startswith("/dev/serial/by-path/") or port.startswith("/dev/tty")):
-        raise ConfigurationError(f"devices.{device_id}.port is not a supported serial path")
+    if not (port.startswith(STABLE_SERIAL_PREFIX) or port.startswith("/dev/tty")):
+        raise ConfigurationError(
+            f"devices.{device_id}.port must use {STABLE_SERIAL_PREFIX} or a direct /dev/tty path"
+        )
     if enabled and "REPLACE_ME" in port:
         raise ConfigurationError(f"devices.{device_id} is enabled with a placeholder port")
     if enabled and require_ports_exist and not Path(port).exists():

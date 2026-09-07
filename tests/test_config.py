@@ -10,7 +10,7 @@ import pytest
 from wengao._vendor import tomli as vendored_tomli
 from wengao.config import load_config, parse_config
 from wengao.errors import ConfigurationError
-from wengao.profiles import ControlMode, Direction, DvccPolicy, VenusRole
+from wengao.profiles import BUILTIN_PROFILES, ControlMode, Direction, DvccPolicy, VenusRole
 
 
 def valid_device(**updates: Any) -> dict[str, Any]:
@@ -18,7 +18,7 @@ def valid_device(**updates: Any) -> dict[str, Any]:
         "id": "device-1",
         "enabled": True,
         "profile": "bidirectional-battery-link",
-        "port": "/dev/serial/by-path/synthetic-port-1",
+        "port": "/dev/serial/by-id/synthetic-port-1",
         "slave_address": 1,
         "system_terminal": "B",
         "device_instance": 40,
@@ -72,6 +72,9 @@ def test_profile_toml_files_match_embedded_profiles() -> None:
         with path.open("rb") as handle:
             profile = tomllib.load(handle)
         assert profile["id"] == path.stem
+        embedded = BUILTIN_PROFILES[path.stem]
+        assert set(profile["venus_roles"]) == {role.value for role in embedded.allowed_venus_roles}
+        assert profile["default_venus_role"] == embedded.default_venus_role.value
 
 
 @pytest.mark.parametrize("version", [None, 0, 2, "1"])
@@ -127,7 +130,12 @@ def test_allows_same_device_instance_in_different_classes() -> None:
 
 def test_rejects_active_placeholder_port() -> None:
     with pytest.raises(ConfigurationError, match="placeholder"):
-        parse_config(config_with(valid_device(port="/dev/serial/by-path/REPLACE_ME")))
+        parse_config(config_with(valid_device(port="/dev/serial/by-id/REPLACE_ME")))
+
+
+def test_rejects_by_path_alias() -> None:
+    with pytest.raises(ConfigurationError, match="by-id"):
+        parse_config(config_with(valid_device(port="/dev/serial/by-path/synthetic-port-1")))
 
 
 @pytest.mark.parametrize("address", [0, 248, -1])
@@ -137,7 +145,7 @@ def test_rejects_invalid_slave_address(address: int) -> None:
 
 
 def test_rejects_missing_port_when_runtime_check_is_enabled(tmp_path: Path) -> None:
-    missing = f"/dev/serial/by-path/{tmp_path.name}-missing"
+    missing = f"/dev/serial/by-id/{tmp_path.name}-missing"
     with pytest.raises(ConfigurationError, match="does not exist"):
         parse_config(config_with(valid_device(port=missing)), require_ports_exist=True)
 
@@ -168,6 +176,17 @@ def test_fixed_direction_accepts_either_physical_direction() -> None:
     parsed = parse_config(config_with(device)).devices[0]
     assert parsed.allowed_directions == (Direction.B_TO_A,)
     assert parsed.locked_direction is Direction.B_TO_A
+
+
+def test_fixed_direction_can_publish_as_dc_system() -> None:
+    device = valid_device(
+        profile="fixed-direction-dc-converter",
+        venus_role="dcsystem",
+        allowed_directions=["A-to-B"],
+        locked_direction="A-to-B",
+    )
+    parsed = parse_config(config_with(device)).devices[0]
+    assert parsed.venus_role is VenusRole.DC_SYSTEM
 
 
 def test_rejects_locked_direction_outside_allowed_set() -> None:

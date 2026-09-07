@@ -13,10 +13,10 @@ def environment(tmp_path: Path, *, pid: int = 1234) -> tuple[SerialStarterPortLo
     physical = device_root / "ttyACM1"
     physical.parent.mkdir()
     physical.touch()
-    by_path = device_root / "serial" / "by-path" / "synthetic"
-    by_path.parent.mkdir(parents=True)
+    by_id = device_root / "serial" / "by-id" / "synthetic"
+    by_id.parent.mkdir(parents=True)
     try:
-        by_path.symlink_to(physical)
+        by_id.symlink_to(physical)
     except OSError as error:
         pytest.skip(f"platform does not permit unprivileged symlink tests: {error}")
     lock_root = tmp_path / "locks"
@@ -28,7 +28,7 @@ def environment(tmp_path: Path, *, pid: int = 1234) -> tuple[SerialStarterPortLo
         process_root=process_root,
         pid=pid,
     )
-    return lock, by_path, lock_root
+    return lock, by_id, lock_root
 
 
 def test_acquires_and_releases_serial_starter_lock(tmp_path: Path) -> None:
