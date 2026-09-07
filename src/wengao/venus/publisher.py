@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import math
 import re
+import time
+from collections.abc import Callable, Mapping
 from typing import Protocol
 
 from wengao import __version__
@@ -14,6 +16,7 @@ from wengao.model import ControlSettings, DeviceIdentity, RealtimeSnapshot, Term
 from wengao.profiles import (
     ControlMode,
     Direction,
+    DisplayCapability,
     Terminal,
     VenusRole,
     direction_from_operating_mode,
@@ -74,6 +77,7 @@ class VenusPublisher:
         *,
         show_unavailable: bool = False,
         controller: DeviceController | None = None,
+        history_values: Mapping[str, object] | None = None,
     ) -> None:
         self._service = service
         self._config = config
@@ -86,6 +90,9 @@ class VenusPublisher:
         self._add_mandatory(identity)
         self._add_common_paths(identity, show_unavailable=show_unavailable)
         self._add_role_paths()
+        self._history_paths = frozenset(history_values or {})
+        for path, value in (history_values or {}).items():
+            self._add(path, value)
         self._service.register()
 
     def _add_mandatory(self, identity: DeviceIdentity | None) -> None:
@@ -105,19 +112,35 @@ class VenusPublisher:
 
     def _add_common_paths(self, identity: DeviceIdentity | None, *, show_unavailable: bool) -> None:
         connected = identity is not None
-        communication_error = int(not connected and self._config.alarms.communication)
-        communication_alarm = 2 if communication_error else 0
+        battery_source = self._config.battery_source
+        dc_load_breakdown = self._config.profile.supports_display(
+            DisplayCapability.DC_LOAD_BREAKDOWN
+        )
+        terminal_rows = self._config.profile.supports_display(DisplayCapability.TERMINAL_ROWS)
+        directional_battery_source = self._config.profile.supports_display(
+            DisplayCapability.DIRECTIONAL_BATTERY_SOURCE
+        )
+        communication_alarm = 2 if not connected and self._config.alarms.communication else 0
         static: dict[str, object] = {
             "/CustomName": self._config.custom_name,
             "/Serial": identity.serial_number if identity else None,
             "/Mode": 1 if self._config.control_mode is ControlMode.MONITOR_ONLY else None,
             "/State": 0,
-            "/ErrorCode": communication_error,
+            # Victron error-code values are device-class specific. Do not turn
+            # communication loss or an unknown Wengao direction into a made-up
+            # converter error: alternator error 1, for example, is presented as
+            # a battery over-temperature alarm.
+            "/ErrorCode": 0,
             "/Alarms/Communication": communication_alarm,
             "/Wengao/Model": identity.model if identity else None,
             "/Wengao/ProtocolVersion": identity.protocol_version if identity else None,
+            "/WengaoProfile": self._config.profile.id,
+            "/WengaoProfileDcLoadBreakdown": int(dc_load_breakdown),
+            "/WengaoProfileTerminalRows": int(terminal_rows),
+            "/WengaoProfileDirectionalBatterySource": int(directional_battery_source),
             "/WengaoShowUnavailable": int(show_unavailable),
-            "/WengaoDisplayOrder": self._config.display_order,
+            "/WengaoDisplayOrder": self._config.display_order if dc_load_breakdown else None,
+            "/WengaoTerminalRowsOrder": self._config.display_order if terminal_rows else None,
             "/Wengao/SystemTerminal": self._config.system_terminal.value,
             "/Wengao/Control/WritesEnabled": int(self._config.permissions.any_enabled()),
             "/Wengao/Control/LastResult": "never",
@@ -131,6 +154,19 @@ class VenusPublisher:
             "/Wengao/AccVoltage": None,
             "/Wengao/RmtVoltage": None,
             "/Wengao/DcLoadPower": None,
+            "/WengaoBatterySourceEnabled": int(
+                battery_source is not None and battery_source.enabled
+            ),
+            "/WengaoBatterySourceName": (
+                battery_source.custom_name if battery_source is not None else None
+            ),
+            "/WengaoBatterySourceTerminal": (
+                _other_terminal(self._config.system_terminal).value
+                if battery_source is not None and battery_source.enabled
+                else None
+            ),
+            "/WengaoBatterySourceActive": None,
+            "/WengaoBatterySourcePower": None,
             "/Wengao/TerminalA/Voltage": None,
             "/Wengao/TerminalA/Current": None,
             "/Wengao/TerminalA/SignedCurrent": None,
@@ -151,6 +187,8 @@ class VenusPublisher:
             "/Wengao/AccVoltage",
             "/Wengao/RmtVoltage",
             "/Wengao/DcLoadPower",
+            "/WengaoBatterySourceActive",
+            "/WengaoBatterySourcePower",
             "/Wengao/TerminalA/Voltage",
             "/Wengao/TerminalA/Current",
             "/Wengao/TerminalA/SignedCurrent",
@@ -191,6 +229,14 @@ class VenusPublisher:
             self._set(f"{prefix}/Current", values.current_a)
             self._set(f"{prefix}/Power", values.power_w)
 
+    def publish_history(self, values: Mapping[str, object]) -> None:
+        """Publish locally accumulated statistics without touching device registers."""
+
+        if frozenset(values) != self._history_paths:
+            raise ValueError("history path set changed after D-Bus service registration")
+        for path, value in values.items():
+            self._set(path, value)
+
     def _add_role_paths(self) -> None:
         role = self._config.venus_role
         for path in ("/Dc/0/Voltage", "/Dc/0/Current", "/Dc/0/Power", "/Dc/0/Temperature"):
@@ -205,7 +251,10 @@ class VenusPublisher:
         direction = direction_from_operating_mode(snapshot.operating_mode)
         allowed = direction is not None and direction in self._config.allowed_directions
         self._set("/Connected", 1)
-        self._set("/WengaoDisplayOrder", self._config.display_order)
+        if self._config.profile.supports_display(DisplayCapability.DC_LOAD_BREAKDOWN):
+            self._set("/WengaoDisplayOrder", self._config.display_order)
+        if self._config.profile.supports_display(DisplayCapability.TERMINAL_ROWS):
+            self._set("/WengaoTerminalRowsOrder", self._config.display_order)
         self._set("/Alarms/Communication", 0)
         self._set("/Wengao/Direction", direction.value if direction else None)
         self._set("/Wengao/DirectionAllowed", int(allowed) if direction else None)
@@ -219,7 +268,12 @@ class VenusPublisher:
         self._publish_raw_terminal("A", snapshot.terminal_a)
         self._publish_raw_terminal("B", snapshot.terminal_b)
         self._publish_signed_terminal_currents(snapshot, direction)
-        if allowed and direction is not None:
+        self._publish_battery_source(snapshot, direction if allowed else None)
+        if (
+            self._config.profile.supports_display(DisplayCapability.DC_LOAD_BREAKDOWN)
+            and allowed
+            and direction is not None
+        ):
             system = _system_measurements(snapshot, self._config.system_terminal)
             outward_power = (
                 _system_outward_sign(direction, self._config.system_terminal) * system.power_w
@@ -227,7 +281,9 @@ class VenusPublisher:
             self._set("/Wengao/DcLoadPower", max(0, outward_power))
         else:
             self._set("/Wengao/DcLoadPower", None)
-        self._set("/ErrorCode", 0 if snapshot.fault_bits == 0 and allowed else 1)
+        # No Wengao fault-bit to Victron ErrorCode mapping has been verified.
+        # Keep the raw bits and avoid publishing a false class-specific alarm.
+        self._set("/ErrorCode", 0)
         self._set("/State", _venus_state(snapshot.charging_state) if allowed else 0)
         if direction is None or direction not in self._config.allowed_directions:
             self._invalidate_role_measurements(keep_voltage=True, snapshot=snapshot)
@@ -241,12 +297,12 @@ class VenusPublisher:
 
     def mark_disconnected(self) -> None:
         self._set("/Connected", 0)
-        communication_error = int(self._config.alarms.communication)
-        self._set("/Alarms/Communication", 2 if communication_error else 0)
+        self._set("/Alarms/Communication", 2 if self._config.alarms.communication else 0)
         self._set("/State", 0)
-        self._set("/ErrorCode", communication_error)
+        self._set("/ErrorCode", 0)
         if not self._show_unavailable:
             self._set("/WengaoDisplayOrder", None)
+            self._set("/WengaoTerminalRowsOrder", None)
         for path in self._dynamic_paths:
             if path not in {"/State", "/ErrorCode"}:
                 self._set(path, None)
@@ -294,8 +350,7 @@ class VenusPublisher:
 
     def _can_write(self) -> bool:
         return (
-            self._config.control_mode is ControlMode.EXTERNAL_DBUS
-            and self._controller is not None
+            self._config.control_mode is ControlMode.EXTERNAL_DBUS and self._controller is not None
         )
 
     def _can_write_remote(self) -> bool:
@@ -342,21 +397,25 @@ class VenusPublisher:
         terminal = _system_measurements(snapshot, self._config.system_terminal)
         sign = _system_outward_sign(direction, self._config.system_terminal)
         self._set("/Dc/0/Voltage", terminal.voltage_v)
-        self._set("/Dc/0/Current", sign * terminal.current_a)
-        self._set("/Dc/0/Power", sign * terminal.power_w)
+        if self._battery_source_active(direction):
+            self._set("/Dc/0/Current", 0)
+            self._set("/Dc/0/Power", 0)
+        else:
+            self._set("/Dc/0/Current", sign * terminal.current_a)
+            self._set("/Dc/0/Power", sign * terminal.power_w)
         self._set("/Dc/0/Temperature", snapshot.ambient_temperature_c)
 
     def _publish_alternator(self, snapshot: RealtimeSnapshot, direction: Direction) -> None:
         output = _system_measurements(snapshot, self._config.system_terminal)
         input_measurements = _other_measurements(snapshot, self._config.system_terminal)
-        charge_sign = -_system_outward_sign(direction, self._config.system_terminal)
+        is_charging_system = _system_outward_sign(direction, self._config.system_terminal) < 0
         self._set("/Dc/0/Voltage", output.voltage_v)
-        self._set("/Dc/0/Current", charge_sign * output.current_a)
-        self._set("/Dc/0/Power", charge_sign * output.power_w)
+        self._set("/Dc/0/Current", output.current_a if is_charging_system else 0)
+        self._set("/Dc/0/Power", output.power_w if is_charging_system else 0)
         self._set("/Dc/0/Temperature", snapshot.ambient_temperature_c)
         self._set("/Dc/In/V", input_measurements.voltage_v)
-        self._set("/Dc/In/I", input_measurements.current_a)
-        self._set("/Dc/In/P", input_measurements.power_w)
+        self._set("/Dc/In/I", input_measurements.current_a if is_charging_system else 0)
+        self._set("/Dc/In/P", input_measurements.power_w if is_charging_system else 0)
 
     def _publish_dc_dc(self, snapshot: RealtimeSnapshot, direction: Direction) -> None:
         source, destination = _flow_measurements(snapshot, direction)
@@ -402,6 +461,25 @@ class VenusPublisher:
             _without_negative_zero(terminal_b_sign * snapshot.terminal_b.current_a),
         )
 
+    def _publish_battery_source(
+        self, snapshot: RealtimeSnapshot, direction: Direction | None
+    ) -> None:
+        active = direction is not None and self._battery_source_active(direction)
+        self._set("/WengaoBatterySourceActive", int(active))
+        self._set(
+            "/WengaoBatterySourcePower",
+            _system_measurements(snapshot, self._config.system_terminal).power_w if active else 0,
+        )
+
+    def _battery_source_active(self, direction: Direction) -> bool:
+        source = self._config.battery_source
+        return (
+            self._config.profile.supports_display(DisplayCapability.DIRECTIONAL_BATTERY_SOURCE)
+            and source is not None
+            and source.enabled
+            and _system_outward_sign(direction, self._config.system_terminal) < 0
+        )
+
     def _add(
         self,
         path: str,
@@ -441,6 +519,9 @@ class AuxiliaryBatteryPublisher:
         identity: DeviceIdentity | None,
         *,
         show_unavailable: bool = False,
+        last_known_voltage_v: float | None = None,
+        last_live_data_at: int | None = None,
+        wall_clock: Callable[[], float] = time.time,
     ) -> None:
         auxiliary = config.auxiliary_battery
         if auxiliary is None or not auxiliary.enabled:
@@ -450,6 +531,18 @@ class AuxiliaryBatteryPublisher:
         self._config: AuxiliaryBatteryConfig = auxiliary
         self._cache: dict[str, object] = {}
         self._show_unavailable = show_unavailable
+        self._display_last_known_voltage = auxiliary.display_last_known_voltage
+        restored_values_valid = (
+            self._display_last_known_voltage
+            and last_known_voltage_v is not None
+            and math.isfinite(last_known_voltage_v)
+            and 0 <= last_known_voltage_v <= 65
+            and last_live_data_at is not None
+            and last_live_data_at > 0
+        )
+        self._last_known_voltage_v = last_known_voltage_v if restored_values_valid else None
+        self._last_live_data_at = last_live_data_at if restored_values_valid else None
+        self._wall_clock = wall_clock
         connected = identity is not None
         communication_alarm = 2 if not connected and config.alarms.communication else 0
         serial = _auxiliary_serial(identity, auxiliary.terminal)
@@ -465,7 +558,7 @@ class AuxiliaryBatteryPublisher:
             "/Connected": int(connected),
             "/CustomName": auxiliary.custom_name,
             "/Serial": serial,
-            "/Dc/0/Voltage": math.nan if show_unavailable else None,
+            "/Dc/0/Voltage": self._offline_voltage(),
             "/Dc/0/Current": None,
             "/Dc/0/Power": None,
             "/Dc/0/Temperature": None,
@@ -473,6 +566,10 @@ class AuxiliaryBatteryPublisher:
             "/Alarms/Communication": communication_alarm,
             "/Wengao/SourceDevice": config.id,
             "/Wengao/Terminal": auxiliary.terminal.value,
+            "/Wengao/DisplayLastKnownVoltage": int(self._display_last_known_voltage),
+            "/Wengao/VoltageIsLive": 0 if self._display_last_known_voltage else None,
+            "/Wengao/LastKnownVoltage": self._last_known_voltage_v,
+            "/Wengao/LastLiveDataAt": self._last_live_data_at,
         }
         for path, value in values.items():
             self._add(path, value)
@@ -486,9 +583,16 @@ class AuxiliaryBatteryPublisher:
     def publish(self, snapshot: RealtimeSnapshot) -> None:
         measurements = _system_measurements(snapshot, self._config.terminal)
         direction = direction_from_operating_mode(snapshot.operating_mode)
+        observed_at = int(self._wall_clock())
+        self._last_known_voltage_v = measurements.voltage_v
+        self._last_live_data_at = observed_at
         self._set("/Connected", 1)
         self._set("/Alarms/Communication", 0)
         self._set("/Dc/0/Voltage", measurements.voltage_v)
+        if self._display_last_known_voltage:
+            self._set("/Wengao/VoltageIsLive", 1)
+            self._set("/Wengao/LastKnownVoltage", measurements.voltage_v)
+            self._set("/Wengao/LastLiveDataAt", observed_at)
         self._set("/Dc/0/Temperature", snapshot.ambient_temperature_c)
         if direction is None:
             self._set("/Dc/0/Current", None)
@@ -501,13 +605,28 @@ class AuxiliaryBatteryPublisher:
     def mark_disconnected(self) -> None:
         self._set("/Connected", 0)
         self._set("/Alarms/Communication", 2 if self._device_config.alarms.communication else 0)
-        self._set("/Dc/0/Voltage", math.nan if self._show_unavailable else None)
+        self._set("/Dc/0/Voltage", self._offline_voltage())
+        if self._display_last_known_voltage:
+            self._set("/Wengao/VoltageIsLive", 0)
         for path in (
             "/Dc/0/Current",
             "/Dc/0/Power",
             "/Dc/0/Temperature",
         ):
             self._set(path, None)
+
+    @property
+    def last_known_voltage_v(self) -> float | None:
+        return self._last_known_voltage_v
+
+    @property
+    def last_live_data_at(self) -> int | None:
+        return self._last_live_data_at
+
+    def _offline_voltage(self) -> float | None:
+        if self._display_last_known_voltage and self._last_known_voltage_v is not None:
+            return self._last_known_voltage_v
+        return math.nan if self._show_unavailable else None
 
     def _add(self, path: str, value: object) -> None:
         self._service.add_path(path, value, writeable=False)
@@ -542,6 +661,10 @@ def _other_measurements(
     snapshot: RealtimeSnapshot, system_terminal: Terminal
 ) -> TerminalMeasurements:
     return snapshot.terminal_b if system_terminal is Terminal.A else snapshot.terminal_a
+
+
+def _other_terminal(system_terminal: Terminal) -> Terminal:
+    return Terminal.B if system_terminal is Terminal.A else Terminal.A
 
 
 def _flow_measurements(

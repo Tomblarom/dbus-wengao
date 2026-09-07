@@ -3,6 +3,7 @@ id = "fixed-direction-dc-converter"
 allowed_directions = []
 locked_direction = ""
 direction_control = ["locked"]
+display_capabilities = ["dc-load-breakdown", "terminal-rows"]
 venus_roles = ["dcdc", "alternator", "dcsystem"]
 default_venus_role = "dcdc"
 dvcc_policy = "disabled"

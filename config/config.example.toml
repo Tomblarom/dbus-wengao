@@ -46,6 +46,16 @@ enabled = false
 terminal = "A"
 device_instance = 80
 custom_name = "Auxiliary battery"
+# When enabled, the last live voltage and its timestamp are persisted and displayed while the
+# converter sleeps. /Connected remains 0 and current/power remain unavailable without live data.
+display_last_known_voltage = false
+
+# Optional use of the directional-battery-source capability supplied by battery-link profiles.
+# The source appears only while the non-system battery supplies the configured system terminal.
+# This additionally requires venus_role = "dcsystem".
+[devices.battery_source]
+enabled = false
+custom_name = "Auxiliary battery source"
 
 [display]
 unavailable_devices = "hide"
