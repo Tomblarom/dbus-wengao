@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+mkdir -p /var/log/venus-time-sync
+exec multilog t s200000 n4 /var/log/venus-time-sync

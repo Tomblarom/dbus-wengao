@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+SERVICE_ROOT="$(dirname "$(readlink -f "$0")")"
+APP_ROOT="${SERVICE_ROOT%/service}"
+
+exec 2>&1
+exec python3 "$APP_ROOT/time_sync.py"
