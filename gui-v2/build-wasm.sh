@@ -4,7 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST="$SCRIPT_DIR/manifest.json"
-OVERLAY="$SCRIPT_DIR/overlay/components/widgets/DcLoadsWidget.qml"
+WIDGET_OVERLAY="$SCRIPT_DIR/overlay/components/widgets/DcLoadsWidget.qml"
+LIST_PAGE_OVERLAY="$SCRIPT_DIR/overlay/pages/loads/DcLoadListPage.qml"
 OUTPUT_ROOT="$REPO_ROOT/dist/gui-v2"
 
 manifest_value() {
@@ -45,7 +46,8 @@ if [[ "$ACTUAL_COMMIT" != "$UPSTREAM_COMMIT" ]]; then
     exit 2
 fi
 
-install -m 0644 "$OVERLAY" "$SOURCE_ROOT/components/widgets/DcLoadsWidget.qml"
+install -m 0644 "$WIDGET_OVERLAY" "$SOURCE_ROOT/components/widgets/DcLoadsWidget.qml"
+install -m 0644 "$LIST_PAGE_OVERLAY" "$SOURCE_ROOT/pages/loads/DcLoadListPage.qml"
 (
     cd "$SOURCE_ROOT"
     bash scripts/build-wasm.sh

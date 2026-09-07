@@ -13,6 +13,15 @@ import Victron.VenusOS
 OverviewWidget {
 	id: root
 
+	function includeLoadDevice(_device, childItems) {
+		const policy = childItems["WengaoShowUnavailable"]
+		if (!policy || policy.value === undefined) {
+			return true
+		}
+		const connected = childItems["Connected"]
+		return policy.value === 1 || connected?.value === 1
+	}
+
 	//% "DC Loads"
 	title: qsTrId("overview_widget_dcloads_title")
 	type: VenusOS.OverviewWidget_Type_DcLoads
@@ -22,54 +31,87 @@ OverviewWidget {
 	contentItem: ColumnLayout {
 		spacing: Theme.geometry_overviewPage_widget_content_spacing
 
-		RowLayout {
+		WidgetHeader {
+			text: root.title
+			icon.source: "qrc:/images/dcloads.svg"
 			Layout.fillWidth: true
-
-			WidgetHeader {
-				text: root.title
-				icon.source: "qrc:/images/dcloads.svg"
-				Layout.fillWidth: true
-			}
-
-			OverviewElectricalQuantityLabel {
-				widgetSize: VenusOS.OverviewWidget_Size_XS
-				dataObject: Global.system.dc
-				sourceType: VenusOS.ElectricalQuantity_Source_Dc
-				alignment: Qt.AlignRight
-				font.pixelSize: root.tertiaryFontSize
-				valueColor: Theme.color_font_secondary
-				unitColor: Theme.color_font_secondary
-			}
 		}
 
-		Repeater {
-			model: loadDevices
+		OverviewElectricalQuantityLabel {
+			widgetSize: root.size
+			dataObject: Global.system.dc
+			sourceType: VenusOS.ElectricalQuantity_Source_Dc
+			Layout.fillWidth: true
+			Layout.fillHeight: true
+		}
 
-			delegate: RowLayout {
-				required property Device device
+		ColumnLayout {
+			spacing: 0
+			Layout.fillWidth: true
+			Layout.alignment: Qt.AlignBottom
 
-				Layout.fillWidth: true
+			Repeater {
+				model: loadDevices
 
-				Label {
-					text: device.name
-					elide: Text.ElideRight
-					font.pixelSize: Theme.font_overviewPage_widget_phase_minimumSize
-					color: Theme.color_font_secondary
+				delegate: Item {
+					id: deviceDelegate
+
+					required property Device device
+					readonly property bool displayOfflineAsZero: showUnavailableItem.valid
+							&& showUnavailableItem.value === 1
+							&& connectedItem.value !== 1
+
 					Layout.fillWidth: true
-				}
+					implicitHeight: Math.max(deviceLabel.implicitHeight, powerLabel.implicitHeight)
 
-				ElectricalQuantityLabel {
-					dataObject: dcLoadDevice
-					sourceType: VenusOS.ElectricalQuantity_Source_Dc
-					alignment: Qt.AlignRight
-					font.pixelSize: Theme.font_overviewPage_widget_phase_minimumSize
-					valueColor: Theme.color_font_secondary
-					unitColor: Theme.color_font_secondary
-				}
+					Label {
+						id: deviceLabel
 
-				DcDevice {
-					id: dcLoadDevice
-					serviceUid: device.serviceUid
+						anchors {
+							left: parent.left
+							right: powerLabel.left
+							verticalCenter: parent.verticalCenter
+						}
+						text: device.name + ":"
+						elide: Text.ElideRight
+						font.pixelSize: root.tertiaryFontSize
+						color: powerLabel.unitColor
+					}
+
+					ElectricalQuantityLabel {
+						id: powerLabel
+
+						anchors {
+							right: parent.right
+							verticalCenter: parent.verticalCenter
+						}
+						dataObject: QtObject {
+							readonly property real power: deviceDelegate.displayOfflineAsZero
+									? 0
+									: dcLoadDevice.power
+							readonly property real current: NaN
+						}
+						sourceType: VenusOS.ElectricalQuantity_Source_Any
+						alignment: Qt.AlignRight
+						font.pixelSize: root.tertiaryFontSize
+						valueColor: Theme.color_font_primary
+						unitColor: Theme.color_font_secondary
+					}
+
+					DcDevice {
+						id: dcLoadDevice
+						serviceUid: device.serviceUid
+					}
+
+					VeQuickItem {
+						id: connectedItem
+						uid: device.serviceUid + "/Connected"
+					}
+
+					VeQuickItem {
+						id: showUnavailableItem
+						uid: device.serviceUid + "/WengaoShowUnavailable"
+					}
 				}
 			}
 		}
@@ -86,15 +128,30 @@ OverviewWidget {
 	FilteredDeviceModel {
 		id: loadDevices
 		serviceTypes: ["dcsystem", "dcload", "dcdc", "motordrive"]
+		childFilterIds: {
+			"dcsystem": ["Connected", "WengaoShowUnavailable"],
+			"dcload": ["Connected", "WengaoShowUnavailable"],
+			"dcdc": ["Connected", "WengaoShowUnavailable"],
+			"motordrive": ["Connected", "WengaoShowUnavailable"]
+		}
+		childFilterFunction: root.includeLoadDevice
 	}
 
 	FilteredDeviceModel {
 		id: systemLoadDevices
 		serviceTypes: ["dcsystem"]
+		childFilterIds: { "dcsystem": ["Connected", "WengaoShowUnavailable"] }
+		childFilterFunction: root.includeLoadDevice
 	}
 
 	FilteredDeviceModel {
 		id: nonSystemLoadDevices
 		serviceTypes: ["dcload", "dcdc", "motordrive"]
+		childFilterIds: {
+			"dcload": ["Connected", "WengaoShowUnavailable"],
+			"dcdc": ["Connected", "WengaoShowUnavailable"],
+			"motordrive": ["Connected", "WengaoShowUnavailable"]
+		}
+		childFilterFunction: root.includeLoadDevice
 	}
 }
