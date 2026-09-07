@@ -48,9 +48,17 @@ and uninstall do not replace it. No service is enabled when that local file is a
 Tagged releases provide a pull-based installer and SHA-256-verified archive. See
 `docs/venus-installation.md`. This development branch has not produced a public release yet.
 
+## Optional GUIv2 load breakdown
+
+For the explicitly supported Venus GUIv2 version, an optional display-only overlay can show the
+total DC load and one live power row per DC device directly in the existing overview widget. It
+does not change D-Bus roles or device control. The GUI build is strictly version-pinned and has a
+separate backup/restore lifecycle; see `docs/gui-v2.md`.
+
 ## License
 
 Copyright (C) 2026 dbus-wengao contributors.
 
-This project is licensed under the GNU Affero General Public License v3.0 only. See
-`LICENSE`.
+This project is licensed under the GNU Affero General Public License v3.0 only. See `LICENSE`.
+The optional GUIv2 overlay is derived from Victron Energy GUIv2 and remains under the separate
+Victron Energy OS license v1 in `gui-v2/LICENSE.txt`.

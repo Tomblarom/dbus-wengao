@@ -11,3 +11,4 @@ first public release is made.
 - Add a vendored MIT-licensed Tomli fallback for stripped Venus OS Python builds.
 - Add isolated daemontools services, persistent `/data/apps` lifecycle scripts and CI workflows.
 - Coordinate per-device services with Venus `serial-starter` locks and its official TTY stop helper.
+- Add an optional, version-pinned GUIv2 overview breakdown for individual DC devices.
