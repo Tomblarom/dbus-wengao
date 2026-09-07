@@ -19,6 +19,7 @@ from wengao.profiles import (
     BUILTIN_PROFILES,
     ControlMode,
     Direction,
+    DisplayCapability,
     DvccPolicy,
     Profile,
     Terminal,
@@ -66,6 +67,13 @@ class AuxiliaryBatteryConfig:
     terminal: Terminal
     device_instance: int
     custom_name: str
+    display_last_known_voltage: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class BatterySourceConfig:
+    enabled: bool
+    custom_name: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +120,7 @@ class DeviceConfig:
     permissions: DevicePermissions
     alarms: AlarmConfig
     auxiliary_battery: AuxiliaryBatteryConfig | None
+    battery_source: BatterySourceConfig | None
     write_limits: WriteLimits
     display_order: int = 0
 
@@ -225,6 +234,7 @@ def _parse_device(
         "permissions",
         "alarms",
         "auxiliary_battery",
+        "battery_source",
         "write_limits",
     }
     _reject_unknown(raw, allowed_keys, "device")
@@ -364,6 +374,15 @@ def _parse_device(
         parent_enabled=enabled,
         system_terminal=terminal,
     )
+    battery_source = _parse_battery_source(
+        raw.get("battery_source"),
+        device_id=device_id,
+        parent_enabled=enabled,
+        profile=profile,
+        venus_role=role,
+        system_terminal=terminal,
+        allowed_directions=directions,
+    )
     return DeviceConfig(
         id=device_id,
         enabled=enabled,
@@ -383,6 +402,7 @@ def _parse_device(
         permissions=permissions,
         alarms=alarms,
         auxiliary_battery=auxiliary_battery,
+        battery_source=battery_source,
         write_limits=write_limits,
         display_order=display_order,
     )
@@ -503,20 +523,75 @@ def _parse_auxiliary_battery(
     if not isinstance(raw, dict):
         raise ConfigurationError(f"devices.{device_id}.auxiliary_battery must be a table")
     context = f"devices.{device_id}.auxiliary_battery"
-    _reject_unknown(raw, {"enabled", "terminal", "device_instance", "custom_name"}, context)
+    _reject_unknown(
+        raw,
+        {
+            "enabled",
+            "terminal",
+            "device_instance",
+            "custom_name",
+            "display_last_known_voltage",
+        },
+        context,
+    )
     enabled = _boolean(raw.get("enabled", False), f"{context}.enabled")
     terminal = _enum(Terminal, raw.get("terminal"), f"{context}.terminal")
     instance = _integer(raw.get("device_instance"), f"{context}.device_instance")
     if not 0 <= instance <= MAX_DEVICE_INSTANCE:
         raise ConfigurationError(f"{context}.device_instance must be in 0..{MAX_DEVICE_INSTANCE}")
     custom_name = _string(raw.get("custom_name"), f"{context}.custom_name").strip()
+    display_last_known_voltage = _boolean(
+        raw.get("display_last_known_voltage", False),
+        f"{context}.display_last_known_voltage",
+    )
     if not custom_name or len(custom_name) > 64:
         raise ConfigurationError(f"{context}.custom_name must contain 1..64 characters")
     if enabled and not parent_enabled:
         raise ConfigurationError(f"{context} cannot be enabled for a disabled device")
     if enabled and terminal is system_terminal:
         raise ConfigurationError(f"{context}.terminal must differ from system_terminal")
-    return AuxiliaryBatteryConfig(enabled, terminal, instance, custom_name)
+    return AuxiliaryBatteryConfig(
+        enabled,
+        terminal,
+        instance,
+        custom_name,
+        display_last_known_voltage,
+    )
+
+
+def _parse_battery_source(
+    raw: object,
+    *,
+    device_id: str,
+    parent_enabled: bool,
+    profile: Profile,
+    venus_role: VenusRole,
+    system_terminal: Terminal,
+    allowed_directions: tuple[Direction, ...],
+) -> BatterySourceConfig | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ConfigurationError(f"devices.{device_id}.battery_source must be a table")
+    context = f"devices.{device_id}.battery_source"
+    _reject_unknown(raw, {"enabled", "custom_name"}, context)
+    enabled = _boolean(raw.get("enabled", False), f"{context}.enabled")
+    custom_name = _string(raw.get("custom_name"), f"{context}.custom_name").strip()
+    if not custom_name or len(custom_name) > 64:
+        raise ConfigurationError(f"{context}.custom_name must contain 1..64 characters")
+    if enabled and not parent_enabled:
+        raise ConfigurationError(f"{context} cannot be enabled for a disabled device")
+    if enabled and not profile.supports_display(DisplayCapability.DIRECTIONAL_BATTERY_SOURCE):
+        raise ConfigurationError(f"{context} is not supported by profile {profile.id!r}")
+    if enabled and venus_role is not VenusRole.DC_SYSTEM:
+        raise ConfigurationError(f"{context} requires venus_role = 'dcsystem'")
+    charging_direction = Direction.B_TO_A if system_terminal is Terminal.A else Direction.A_TO_B
+    if enabled and charging_direction not in allowed_directions:
+        raise ConfigurationError(
+            f"{context} requires the {charging_direction.value} direction that charges "
+            f"system terminal {system_terminal.value}"
+        )
+    return BatterySourceConfig(enabled, custom_name)
 
 
 def _parse_permissions(raw: dict[str, Any], device_id: str) -> DevicePermissions:

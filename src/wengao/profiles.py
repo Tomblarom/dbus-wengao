@@ -31,6 +31,12 @@ class DvccPolicy(StrEnum):
     DISABLED = "disabled"
 
 
+class DisplayCapability(StrEnum):
+    DC_LOAD_BREAKDOWN = "dc-load-breakdown"
+    TERMINAL_ROWS = "terminal-rows"
+    DIRECTIONAL_BATTERY_SOURCE = "directional-battery-source"
+
+
 @dataclass(frozen=True, slots=True)
 class Profile:
     id: str
@@ -39,6 +45,10 @@ class Profile:
     allowed_venus_roles: frozenset[VenusRole]
     default_venus_role: VenusRole
     direction_controls: frozenset[str]
+    display_capabilities: frozenset[DisplayCapability]
+
+    def supports_display(self, capability: DisplayCapability) -> bool:
+        return capability in self.display_capabilities
 
 
 BUILTIN_PROFILES: dict[str, Profile] = {
@@ -49,6 +59,13 @@ BUILTIN_PROFILES: dict[str, Profile] = {
         allowed_venus_roles=frozenset({VenusRole.ALTERNATOR, VenusRole.DC_SYSTEM}),
         default_venus_role=VenusRole.ALTERNATOR,
         direction_controls=frozenset({"external-hardware", "software", "device-automatic"}),
+        display_capabilities=frozenset(
+            {
+                DisplayCapability.DC_LOAD_BREAKDOWN,
+                DisplayCapability.TERMINAL_ROWS,
+                DisplayCapability.DIRECTIONAL_BATTERY_SOURCE,
+            }
+        ),
     ),
     "bidirectional-battery-link": Profile(
         id="bidirectional-battery-link",
@@ -57,6 +74,13 @@ BUILTIN_PROFILES: dict[str, Profile] = {
         allowed_venus_roles=frozenset({VenusRole.DC_SYSTEM}),
         default_venus_role=VenusRole.DC_SYSTEM,
         direction_controls=frozenset({"external-hardware", "software", "device-automatic"}),
+        display_capabilities=frozenset(
+            {
+                DisplayCapability.DC_LOAD_BREAKDOWN,
+                DisplayCapability.TERMINAL_ROWS,
+                DisplayCapability.DIRECTIONAL_BATTERY_SOURCE,
+            }
+        ),
     ),
     "fixed-direction-dc-converter": Profile(
         id="fixed-direction-dc-converter",
@@ -65,6 +89,12 @@ BUILTIN_PROFILES: dict[str, Profile] = {
         allowed_venus_roles=frozenset({VenusRole.DC_DC, VenusRole.ALTERNATOR, VenusRole.DC_SYSTEM}),
         default_venus_role=VenusRole.DC_DC,
         direction_controls=frozenset({"locked"}),
+        display_capabilities=frozenset(
+            {
+                DisplayCapability.DC_LOAD_BREAKDOWN,
+                DisplayCapability.TERMINAL_ROWS,
+            }
+        ),
     ),
 }
 

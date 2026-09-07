@@ -7,6 +7,7 @@ config.toml
 config.local.toml
 *.private.toml
 captures/
+state/
 *.jsonl
 *.pcap
 *.log

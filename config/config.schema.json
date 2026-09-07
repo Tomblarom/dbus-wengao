@@ -31,6 +31,21 @@
     "device": {
       "type": "object",
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {"profile": {"const": "fixed-direction-dc-converter"}},
+            "required": ["profile"]
+          },
+          "then": {
+            "properties": {
+              "battery_source": {
+                "properties": {"enabled": {"const": false}}
+              }
+            }
+          }
+        }
+      ],
       "required": [
         "id", "enabled", "profile", "port", "slave_address", "system_terminal",
         "device_instance", "custom_name", "venus_role"
@@ -64,7 +79,8 @@
         "permissions": {"$ref": "#/$defs/permissions"},
         "alarms": {"$ref": "#/$defs/alarms"},
         "write_limits": {"$ref": "#/$defs/writeLimits"},
-        "auxiliary_battery": {"$ref": "#/$defs/auxiliaryBattery"}
+        "auxiliary_battery": {"$ref": "#/$defs/auxiliaryBattery"},
+        "battery_source": {"$ref": "#/$defs/batterySource"}
       }
     },
     "auxiliaryBattery": {
@@ -75,6 +91,16 @@
         "enabled": {"type": "boolean", "default": false},
         "terminal": {"enum": ["A", "B"]},
         "device_instance": {"type": "integer", "minimum": 0, "maximum": 32767},
+        "custom_name": {"type": "string", "minLength": 1, "maxLength": 64},
+        "display_last_known_voltage": {"type": "boolean", "default": false}
+      }
+    },
+    "batterySource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "custom_name"],
+      "properties": {
+        "enabled": {"type": "boolean", "default": false},
         "custom_name": {"type": "string", "minLength": 1, "maxLength": 64}
       }
     },

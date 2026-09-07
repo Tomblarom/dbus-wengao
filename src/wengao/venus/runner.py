@@ -19,6 +19,8 @@ from wengao.profiles import ControlMode
 from wengao.protocol.capture import CaptureWriter
 from wengao.protocol.client import WengaoProtocol
 from wengao.protocol.transport import SerialRtuTransport
+from wengao.venus.history import ConverterHistoryStore
+from wengao.venus.lastknown import LastKnownVoltageStore
 from wengao.venus.portlock import SerialStarterPortLock
 from wengao.venus.publisher import (
     AuxiliaryBatteryPublisher,
@@ -29,6 +31,7 @@ from wengao.venus.publisher import (
 from wengao.venus.runtime import load_venus_runtime
 
 DEFAULT_CONFIG = Path("/data/setupOptions/WengaoDcdc/config.toml")
+DEFAULT_STATE_DIRECTORY = Path("/data/setupOptions/WengaoDcdc/state")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -85,6 +88,14 @@ def run_service(config_path: Path, device_id: str) -> int:
         capture=capture,
     )
     controller = SafeWriteController(protocol, config)
+    history_store = ConverterHistoryStore(
+        DEFAULT_STATE_DIRECTORY,
+        config.id,
+        config.system_terminal,
+        config.allowed_directions,
+        poll_interval=config.poll_interval,
+    )
+    history_store.load()
     runtime = load_venus_runtime()
     runtime.dbus_main_loop(set_as_default=True)
     show_unavailable = driver_config.display.unavailable_devices is UnavailableDeviceDisplay.ZERO
@@ -97,10 +108,20 @@ def run_service(config_path: Path, device_id: str) -> int:
             None,
             show_unavailable=True,
             controller=controller,
+            history_values=history_store.dbus_values(),
         )
     auxiliary_publisher: AuxiliaryBatteryPublisher | None = None
     auxiliary = config.auxiliary_battery
+    last_known_store: LastKnownVoltageStore | None = None
     if auxiliary is not None and auxiliary.enabled:
+        restored = None
+        if auxiliary.display_last_known_voltage:
+            last_known_store = LastKnownVoltageStore(
+                DEFAULT_STATE_DIRECTORY,
+                config.id,
+                auxiliary.terminal,
+            )
+            restored = last_known_store.load()
         auxiliary_backend = runtime.service_class(
             auxiliary_battery_service_name(config), register=False
         )
@@ -109,6 +130,8 @@ def run_service(config_path: Path, device_id: str) -> int:
             config,
             None,
             show_unavailable=show_unavailable,
+            last_known_voltage_v=restored.voltage_v if restored else None,
+            last_live_data_at=restored.observed_at if restored else None,
         )
 
     main_loop = runtime.glib.MainLoop()
@@ -129,10 +152,15 @@ def run_service(config_path: Path, device_id: str) -> int:
 
     def mark_disconnected() -> None:
         controller.revoke()
+        history_store.mark_disconnected()
         if publisher is not None:
             publisher.mark_disconnected()
+            publisher.publish_history(history_store.dbus_values())
         if auxiliary_publisher is not None:
             auxiliary_publisher.mark_disconnected()
+        if last_known_store is not None:
+            last_known_store.flush()
+        history_store.flush()
 
     def poll() -> bool:
         nonlocal identity, publisher, backoff, next_attempt_at, next_control_read_at
@@ -166,10 +194,14 @@ def run_service(config_path: Path, device_id: str) -> int:
                     current_identity,
                     show_unavailable=False,
                     controller=controller,
+                    history_values=history_store.dbus_values(),
                 )
             else:
                 publisher.publish_identity(current_identity)
+            history_store.record(current)
             publisher.publish(current)
+            publisher.publish_history(history_store.dbus_values())
+            history_store.flush_if_due()
             if config.control_mode is ControlMode.EXTERNAL_DBUS and (
                 connecting or now >= next_control_read_at
             ):
@@ -178,6 +210,12 @@ def run_service(config_path: Path, device_id: str) -> int:
             if auxiliary_publisher is not None:
                 auxiliary_publisher.publish_identity(current_identity)
                 auxiliary_publisher.publish(current)
+                if last_known_store is not None:
+                    voltage = auxiliary_publisher.last_known_voltage_v
+                    observed_at = auxiliary_publisher.last_live_data_at
+                    if voltage is not None and observed_at is not None:
+                        last_known_store.record(voltage, observed_at=observed_at)
+                        last_known_store.flush_if_due()
             backoff = 1.0
             next_attempt_at = now + config.poll_interval
         except (OSError, WengaoError, RuntimeError) as error:
@@ -194,6 +232,9 @@ def run_service(config_path: Path, device_id: str) -> int:
         poll()
         main_loop.run()
     finally:
+        if last_known_store is not None:
+            last_known_store.flush()
+        history_store.flush()
         transport.close()
         port_lock.release()
         lock.close()
